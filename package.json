@@ -1,0 +1,33 @@
+{
+  "name": "jellino",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "description": "Jellyfin-protocol gateway for the Stremio/Nuvio addon ecosystem on Cloudflare Workers",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev -c wrangler.local.toml",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5",
+    "@types/node": "^26.6.2",
+    "@vitest/coverage-v8": "^3",
+    "typescript": "^5",
+    "vitest": "^3",
+    "wrangler": "^4"
+  },
+  "cloudflare": {
+    "bindings": {
+      "DB": {
+        "description": "D1 database for profiles, watch state, and Nuvio settings (auto-created on first dashboard deploy)"
+      }
+    }
+  }
+}

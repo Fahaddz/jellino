@@ -1,0 +1,21 @@
+name = "jellino"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+[assets]
+binding = "ASSETS"
+directory = "./public"
+html_handling = "none"
+not_found_handling = "none"
+run_worker_first = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "jellino-db"
+migrations_dir = "migrations"
+
+[observability]
+enabled = false

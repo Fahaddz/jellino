@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Auto Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: "Guard: zero comments in src/"
+        run: |
+          COMMENTS=$(grep -rnE '^[[:space:]]*(//|/\*)' src/ || true)
+          if [ -n "$COMMENTS" ]; then
+            echo "Comments found in src/:"
+            echo "$COMMENTS"
+            exit 1
+          fi
+
+      - name: Typecheck & Test
+        run: |
+          bun run typecheck
+          bun x vitest run
+
+      - name: Determine Version & Create Tag
+        id: tagger
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git fetch --tags --force
+
+          PKG_VERSION=$(bun -e "console.log(require('./package.json').version)")
+          TAG="v$PKG_VERSION"
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            IFS='.' read -r major minor patch <<< "$PKG_VERSION"
+            NEXT_PATCH=$((patch + 1))
+            NEW_VERSION="${major}.${minor}.${NEXT_PATCH}"
+            TAG="v$NEW_VERSION"
+
+            echo "Tag v$PKG_VERSION already exists. Bumping to $TAG"
+
+            bun -e "
+              const fs = require('fs');
+              const pkg = require('./package.json');
+              pkg.version = '$NEW_VERSION';
+              fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n');
+            "
+
+            git commit -am "chore(release): bump version to $NEW_VERSION [skip ci]"
+            git push origin main
+          fi
+
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tagger.outputs.tag }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
