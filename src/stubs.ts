@@ -71,11 +71,15 @@ export function registerStubs(app: Hono<{ Bindings: Env }>, serverId: string): v
 
   app.get("/Items/:id/LocalTrailers", (c) => c.json([]));
 
+  app.get("/Users/:userId/Items/:id/LocalTrailers", (c) => c.json([]));
+
   app.get("/Items/:id/Intros", (c) => c.json({ Items: [], TotalRecordCount: 0, StartIndex: 0 }));
 
   app.get("/Users/:userId/Items/:id/Intros", (c) => c.json({ Items: [], TotalRecordCount: 0, StartIndex: 0 }));
 
   app.get("/Items/:id/SpecialFeatures", (c) => c.json([]));
+
+  app.get("/Users/:userId/Items/:id/SpecialFeatures", (c) => c.json([]));
 
   app.get("/Videos/:id/AdditionalParts", (c) => c.json({ Items: [], TotalRecordCount: 0, StartIndex: 0 }));
 
@@ -83,9 +87,21 @@ export function registerStubs(app: Hono<{ Bindings: Env }>, serverId: string): v
 
   app.get("/Items/:id/ThemeSongs", (c) => c.json({ Items: [], TotalRecordCount: 0, StartIndex: 0 }));
 
+  app.get("/Users/:userId/Items/:id/ThemeSongs", (c) => c.json({ Items: [], TotalRecordCount: 0, StartIndex: 0 }));
+
   app.get("/Items/:id/ThemeVideos", (c) => c.json({ Items: [], TotalRecordCount: 0, StartIndex: 0 }));
 
+  app.get("/Users/:userId/Items/:id/ThemeVideos", (c) => c.json({ Items: [], TotalRecordCount: 0, StartIndex: 0 }));
+
   app.get("/Items/:id/ThemeMedia", (c) =>
+    c.json({
+      ThemeVideosResult: { Items: [], TotalRecordCount: 0, StartIndex: 0 },
+      ThemeSongsResult: { Items: [], TotalRecordCount: 0, StartIndex: 0 },
+      SoundtrackSongsResult: { Items: [], TotalRecordCount: 0, StartIndex: 0 },
+    }),
+  );
+
+  app.get("/Users/:userId/Items/:id/ThemeMedia", (c) =>
     c.json({
       ThemeVideosResult: { Items: [], TotalRecordCount: 0, StartIndex: 0 },
       ThemeSongsResult: { Items: [], TotalRecordCount: 0, StartIndex: 0 },

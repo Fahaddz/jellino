@@ -136,7 +136,7 @@ async function playbackSubs(
   expect(info.status).toBe(200);
   const payload = (await info.json()) as { MediaSources: { Id: string; MediaStreams: Record<string, unknown>[] }[] };
   const subs = (payload.MediaSources[0]?.MediaStreams ?? []).filter((s) => s.Type === "Subtitle");
-  return { ...net, app, env, id, token, subs, payload };
+  return { ...net, app, env, id, token, adminId, subs, payload };
 }
 
 describe("subtitle helpers (AIOMetadata method)", () => {
@@ -419,6 +419,18 @@ describe("playback advertisement and delivery", () => {
     expect(click.status).toBe(200);
     expect(await click.text()).toContain("Hello");
     expect(calls.filter((url) => url === `${ALPHA}/stream/movie/tt100.json`).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("rebuilds when the stored offer no longer holds the requested index", async () => {
+    const { app, env, id, adminId, subs, payload } = await playbackSubs({
+      subtitles: [{ id: "en", url: "https://cdn.example/en.srt", lang: "eng" }],
+    });
+    const cache = (globalThis as unknown as { caches: { default: Cache } }).caches.default;
+    const sourceId = String(payload.MediaSources[0]?.Id ?? "src0");
+    await rememberOffered(cache, adminId, id, sourceId, { embedded: 1, tracks: [] });
+    const click = await callApp(app, env, String(subs[0]?.DeliveryUrl));
+    expect(click.status).toBe(200);
+    expect(await click.text()).toContain("Hello");
   });
 
   it("404s an index that was never offered", async () => {

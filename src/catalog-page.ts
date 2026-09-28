@@ -11,6 +11,7 @@ export interface CatalogWindow {
 export interface CatalogWindowResult {
   metas: StremioMeta[];
   hasMore: boolean;
+  failed: boolean;
 }
 
 const MAX_CATALOG_PAGES = 25;
@@ -192,9 +193,9 @@ async function alignedWindow(
     dedupePush(seen, merged, page.metas);
   }
   const items = merged.slice(offset, offset + limit);
-  if (merged.length > offset + items.length) return { metas: items, hasMore: true };
-  if (short) return { metas: items, hasMore: false };
-  if (failed) return { metas: items, hasMore: true };
+  if (merged.length > offset + items.length) return { metas: items, hasMore: true, failed };
+  if (short) return { metas: items, hasMore: false, failed };
+  if (failed) return { metas: items, hasMore: true, failed };
   const lookahead = await fetchPage(base, type, id, {
     extra,
     skip: alignedStart + pageCount * stride,
@@ -203,7 +204,7 @@ async function alignedWindow(
     fetchImpl,
   });
   const fresh = lookahead.metas.some((meta) => !seen.has(`${meta.type}:${meta.id}`));
-  return { metas: items, hasMore: fresh };
+  return { metas: items, hasMore: fresh, failed: failed || !lookahead.ok };
 }
 
 async function chainedWindow(
@@ -221,9 +222,11 @@ async function chainedWindow(
   const metas: StremioMeta[] = [];
   let skip = start;
   let lastFull = false;
+  let failed = false;
   for (let page = 0; page < MAX_CATALOG_PAGES; page += 1) {
     const result = await fetchPage(base, type, id, { extra, skip, pageIndex: null, cache, fetchImpl });
     if (result.metas.length === 0) {
+      failed = !result.ok;
       lastFull = false;
       break;
     }
@@ -239,7 +242,7 @@ async function chainedWindow(
   }
   const items = metas.slice(0, limit);
   const hasMore = metas.length > limit || (lastFull && metas.length >= limit);
-  return { metas: items, hasMore };
+  return { metas: items, hasMore, failed };
 }
 
 export async function catalogWindow(

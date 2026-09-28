@@ -64,6 +64,15 @@ describe("compat stubs", () => {
       ThemeSongsResult: { Items: [] },
       SoundtrackSongsResult: { Items: [] },
     });
+    expect(await (await callApp(app, env, "/Users/x/Items/abc/LocalTrailers")).json()).toEqual([]);
+    expect(await (await callApp(app, env, "/Users/x/Items/abc/SpecialFeatures")).json()).toEqual([]);
+    expect(await (await callApp(app, env, "/Users/x/Items/abc/ThemeSongs")).json()).toMatchObject({ Items: [] });
+    expect(await (await callApp(app, env, "/Users/x/Items/abc/ThemeVideos")).json()).toMatchObject({ Items: [] });
+    expect(await (await callApp(app, env, "/Users/x/Items/abc/ThemeMedia")).json()).toMatchObject({
+      ThemeVideosResult: { Items: [] },
+      ThemeSongsResult: { Items: [] },
+      SoundtrackSongsResult: { Items: [] },
+    });
     expect(await (await callApp(app, env, "/Branding/Configuration")).json()).toMatchObject({
       SplashscreenEnabled: false,
       CustomCss: "",

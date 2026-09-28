@@ -317,6 +317,18 @@ export function registerSessions(app: Hono<{ Bindings: Env }>) {
             }
           })(),
         );
+        background(
+          c,
+          logApp(c.env.DB, {
+            at: now,
+            level: "info",
+            category: "playstate",
+            kind: played ? "played" : "unplayed",
+            profileId: owner,
+            message: `${key ?? itemId} eps=${epKeys.length}`,
+            url: "",
+          }),
+        );
         return c.json({
           Played: played,
           PlayCount: played ? 1 : 0,

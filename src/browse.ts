@@ -31,9 +31,28 @@ import {
   type LibraryMediaKind,
   type StremioCatalog,
 } from "./library";
+import { logFailureThrottled } from "./applog";
 import { placeholderMediaSources } from "./streams";
 
 type ImageKind = "primary" | "backdrop" | "logo" | "still";
+
+async function logCatalogFailure(
+  db: D1Database,
+  profileId: string,
+  base: string,
+  type: string,
+  id: string,
+): Promise<void> {
+  await logFailureThrottled(db, `catalog:${profileId}:${base}:${type}:${id}`, {
+    at: Math.floor(Date.now() / 1000),
+    level: "error",
+    category: "catalog",
+    kind: "fetch-failed",
+    profileId,
+    message: `${type}/${id} ${base}`,
+    url: base,
+  });
+}
 
 function imageSizeFor(kind: ImageKind, width: number | null): string {
   if (kind === "backdrop") return width !== null && width > 800 ? "w1280" : "w780";
@@ -292,6 +311,7 @@ export async function profileCatalogItems(
       window,
       extraBase ?? null,
     );
+    if (page.failed) await logCatalogFailure(db, profileId, view.addonUrl, view.catalogType, view.catalogId);
     const metas = hideUnreleased ? page.metas.filter((meta) => !isUnreleased(meta)) : page.metas;
     await rememberCatalogArt(cache, view.addonUrl, metas, null);
     return {
@@ -342,6 +362,7 @@ async function boxsetItems(
       ref.id,
       { start: 0, limit: reach },
     );
+    if (page.failed) await logCatalogFailure(db, profileId, ref.base, ref.type, ref.id);
     hasMore = hasMore || page.hasMore;
     for (const meta of page.metas) {
       const key = `${meta.type}:${meta.id}`;
@@ -388,6 +409,7 @@ export async function personFilmography(
         window,
         `search=${encodeURIComponent(name)}`,
       );
+      if (page.failed) await logCatalogFailure(db, profileId, target.base, target.type, target.id);
       for (const meta of page.metas) {
         const key = `${meta.type}:${meta.id}`;
         if (seen.has(key)) continue;

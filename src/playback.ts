@@ -32,6 +32,11 @@ import {
   type SubtitleTrack,
 } from "./subtitles";
 
+function offerDetail(offer: SubtitleOffer | null, sourceId: string, rebuilt: boolean): string {
+  if (!offer) return `src=${sourceId} no-offer`;
+  return `src=${sourceId} embedded=${offer.embedded} tracks=${offer.tracks.length} ${rebuilt ? "rebuilt" : "recalled"}`;
+}
+
 function streamTarget(id: string): { streamType: string; streamId: string } | null {
   const decoded = decodeItem(id);
   if (!decoded) return null;
@@ -235,7 +240,7 @@ export async function profileMediaSources(
     const tracks = offeredTracks(mergeSubtitleTracks(streamTracks, addonTracks), selection);
     const startIndex = (audioTagsFor(g.stream, streamUrl(g.stream) ?? "").audioCodec ? 2 : 1) + embedded.length;
     const sourceId = mediaSourceIdFor(g.stream);
-    await rememberOffered(cache, profileId, id, sourceId, { embedded: startIndex, tracks });
+    if (withAddonSubtitles) await rememberOffered(cache, profileId, id, sourceId, { embedded: startIndex, tracks });
     advertisedExternal += tracks.length;
     embeddedCount += embedded.length;
     built.push(
@@ -420,9 +425,17 @@ export function registerPlayback(app: Hono<{ Bindings: Env }>) {
     if (!Number.isInteger(index) || index < 0) return fail(`404 bad index q=${qShape}`, 404);
 
     let offer = await recallOffered(caches.default, profileId, id, sourceId);
-    if (!offer) offer = await rebuildOffer(c.env.DB, caches.default, fetch, profileId, id, sourceId);
-    const track = offer ? offer.tracks[index - offer.embedded] : undefined;
-    if (!track) return fail(`404 unknown track q=${qShape}`, 404);
+    let reconstructed = false;
+    let track = offer ? offer.tracks[index - offer.embedded] : undefined;
+    if (!track) {
+      const rebuilt = await rebuildOffer(c.env.DB, caches.default, fetch, profileId, id, sourceId);
+      if (rebuilt) {
+        offer = rebuilt;
+        reconstructed = true;
+        track = rebuilt.tracks[index - rebuilt.embedded];
+      }
+    }
+    if (!track) return fail(`404 unknown track q=${qShape} ${offerDetail(offer, sourceId, reconstructed)}`, 404);
 
     const t0 = Date.now();
     const body = await subtitleBody(caches.default, fetch, track.url, format, track.lang);
@@ -433,7 +446,7 @@ export function registerPlayback(app: Hono<{ Bindings: Env }>) {
         itemId: id,
         index,
         format: file,
-        outcome: `502 upstream fetch failed q=${qShape}`,
+        outcome: `502 upstream fetch failed q=${qShape} ${offerDetail(offer, sourceId, reconstructed)}`,
         ms: Date.now() - t0,
         size: 0,
         url: track.url,

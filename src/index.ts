@@ -33,7 +33,7 @@ import { runScheduled } from "./cron";
 import { registerStubs } from "./stubs";
 import { applyItemQuery, itemQuery, registerDiscover } from "./discover";
 import { personAvatarSvg, personDetail, photoFromImageTag, readPersonPhoto, rememberPersonPhoto, TMDB_API_KEY_SETTING } from "./people";
-import { flushAppLog, logApp, logFailureThrottled, registerAppLog } from "./applog";
+import { clientInfo, flushAppLog, logApp, logFailureThrottled, registerAppLog } from "./applog";
 import { logSubtitleServe } from "./subtitles";
 import { registerQuickConnect } from "./quickconnect";
 import { type NuvioProfile, nuvioPullProfiles, nuvioSignInAndSave, readNuvioAccount, resolveNuvioAvatarUrl } from "./nuvio";
@@ -1264,13 +1264,15 @@ const itemDtoMemoryCache = new Map<string, { dto: Record<string, unknown>; expir
       if (at - (routeMissLogAt.get(key) ?? 0) >= ROUTE_MISS_LOG_SECONDS) {
         routeMissLogAt.set(key, at);
         const shape = [...new URL(c.req.url).searchParams.keys()].sort().join("+").slice(0, 160) || "none";
+        const { client, device } = clientInfo(c.req.raw);
+        const who = client ? `${client}${device ? ` on ${device}` : ""}` : "anonymous";
         try {
           await logApp(c.env.DB, {
             at,
             level: "warn",
             kind: "route404",
             profileId: "anonymous",
-            message: `${c.req.method} ${c.req.path} q=${shape}`,
+            message: `${c.req.method} ${c.req.path} q=${shape} client=${who}`,
             url: c.req.url.slice(0, 500),
           });
         } catch {

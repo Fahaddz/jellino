@@ -747,14 +747,19 @@ export function createFakeDb() {
             .map(([key, entry]) => healthRow(key, entry));
           return { results: rows as T[] };
         }
-        if (normalized.includes("FROM app_log ORDER BY id DESC LIMIT")) {
+        if (normalized.includes("FROM app_log") && normalized.includes("ORDER BY id DESC LIMIT")) {
           const isCategory = normalized.includes("WHERE category = ?");
           const isKind = normalized.includes("WHERE kind = ?");
-          const filter = isCategory || isKind ? String(params[0] ?? "") : "";
-          const limit = Number(params[isCategory || isKind ? 1 : 0] ?? 50);
+          const isLevel = normalized.includes("WHERE level = ?");
+          const filtered = isCategory || isKind || isLevel;
+          const filter = filtered ? String(params[0] ?? "") : "";
+          const limit = Number(params[filtered ? 1 : 0] ?? 50);
           const rows = [...appLog]
             .sort((a, b) => b.id - a.id)
-            .filter((row) => !filter || (isCategory ? row.category === filter : row.kind === filter))
+            .filter((row) =>
+              !filter ||
+              (isCategory ? row.category === filter : isKind ? row.kind === filter : row.level === filter),
+            )
             .slice(0, limit)
             .map((row) => ({
               at: row.at,

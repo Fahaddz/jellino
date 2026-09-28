@@ -349,6 +349,31 @@ describe("phase7 local gate walk", () => {
     expect(await srt.text()).toContain("-->");
   });
 
+  it("keeps the playback offer after the item detail resolves media sources", async () => {
+    installNet();
+    const { raw, db, adminId } = await household();
+    const token = await issueToken(db, adminId, Math.floor(Date.now() / 1000));
+    const app = createApp();
+    const env = testEnv(raw);
+    const headers = official(token);
+    const movieId = encodeItem(CINE, "movie", "tt100");
+
+    const play = await callApp(app, env, `/Items/${movieId}/PlaybackInfo?UserId=${adminId}`, { headers });
+    expect(play.status).toBe(200);
+    const sources = ((await play.json()) as {
+      MediaSources: { Id: string; MediaStreams: { Type: string; DeliveryUrl?: string }[] }[];
+    }).MediaSources;
+    const delivery = String(sources[0]?.MediaStreams.find((t) => t.Type === "Subtitle")?.DeliveryUrl);
+    expect(delivery).toMatch(/^\/Videos\//);
+
+    const detail = await callApp(app, env, `/Items/${movieId}?userId=${adminId}&Fields=MediaSources`, { headers });
+    expect(detail.status).toBe(200);
+
+    const vtt = await callApp(app, env, delivery);
+    expect(vtt.status).toBe(200);
+    expect((await vtt.text()).slice(0, 6)).toBe("WEBVTT");
+  });
+
   it("streamyfin and fladder browse through UserViews plus resume rows", async () => {
     installNet();
     const { raw, db, adminId } = await household();

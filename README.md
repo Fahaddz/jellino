@@ -87,6 +87,8 @@ Jellino adopts proven patterns from established open-source projects rather than
 
 `docs/reference-projects.md` lists the pinned commit for each project and the procedure for pulling upstream changes.
 
+Upstream-sync deviation: subtitle offers are written only by the playback-menu path and are rebuilt when a client requests an index the cached offer no longer holds. Upstream rebuilds only a missing cache entry, so a stale or truncated offer 404s; Jellino retries once before answering 404.
+
 ---
 
 ## Client Context Menu Actions & Nuvio Sync Status

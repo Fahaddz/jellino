@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createApp } from "../src/index";
 import { registerFirstUser } from "../src/auth";
 import { issueToken } from "../src/session";
+import { flushAppLog, logApp } from "../src/applog";
 import { callApp, createFakeDb, testEnv } from "./fake-db";
 
 type Db = import("@cloudflare/workers-types").D1Database;
@@ -42,5 +43,22 @@ describe("app log and sessions", () => {
     const res = await callApp(app, env, "/Sessions", { headers: authHeader(token) });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual([]);
+  });
+
+  it("filters the app log by level", async () => {
+    const { raw, db, adminId } = await household();
+    const token = await liveToken(db, adminId);
+    const app = createApp();
+    const env = testEnv(raw);
+    const headers = authHeader(token);
+    await logApp(db, { at: 10, level: "info", category: "test", kind: "ok", profileId: adminId, message: "fine", url: "" });
+    await logApp(db, { at: 11, level: "error", category: "test", kind: "bad", profileId: adminId, message: "boom", url: "" });
+    await flushAppLog(db);
+    const res = await callApp(app, env, "/api/admin/app-log?level=error", { headers });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { entries: { level: string; kind: string }[] };
+    expect(body.entries.length).toBeGreaterThan(0);
+    expect(body.entries.every((entry) => entry.level === "error")).toBe(true);
+    expect(body.entries.some((entry) => entry.kind === "bad")).toBe(true);
   });
 });

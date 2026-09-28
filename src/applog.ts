@@ -5,6 +5,7 @@ import { adminOwner } from "./session";
 const APP_LOG_KEEP = 300;
 const APP_LOG_FLUSH_SIZE = 20;
 const APP_LOG_PRUNE_EVERY = 50;
+const APP_LOG_BUFFER_MAX = 500;
 
 let buffer: (AppLogRow & { category: string; at: number })[] = [];
 let flushes = 0;
@@ -15,40 +16,48 @@ export async function flushAppLog(db?: D1Database): Promise<void> {
   const target = db ?? lastDb;
   if (!target) return;
   if (flushing) return flushing;
-  const pending = buffer;
-  buffer = [];
-  if (pending.length === 0) return;
-  flushing = (async () => {
+  lastDb = target;
+  const run = (async () => {
+    await Promise.resolve();
     try {
-      await target.batch(
-        pending.map((row) =>
-          target
-            .prepare("INSERT INTO app_log (at, level, category, kind, profile_id, message, url) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
-            .bind(
-              row.at,
-              row.level.slice(0, 20),
-              (row.category ?? "").slice(0, 40),
-              row.kind.slice(0, 40),
-              row.profileId.slice(0, 128),
-              row.message.slice(0, 500),
-              row.url.slice(0, 500),
+      while (buffer.length > 0) {
+        const pending = buffer;
+        buffer = [];
+        try {
+          await target.batch(
+            pending.map((row) =>
+              target
+                .prepare("INSERT INTO app_log (at, level, category, kind, profile_id, message, url) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+                .bind(
+                  row.at,
+                  row.level.slice(0, 20),
+                  (row.category ?? "").slice(0, 40),
+                  row.kind.slice(0, 40),
+                  row.profileId.slice(0, 128),
+                  row.message.slice(0, 500),
+                  row.url.slice(0, 500),
+                ),
             ),
-        ),
-      );
-      flushes += 1;
-      if (flushes % APP_LOG_PRUNE_EVERY === 0) {
-        await target
-          .prepare("DELETE FROM app_log WHERE id NOT IN (SELECT id FROM app_log ORDER BY id DESC LIMIT ?1)")
-          .bind(APP_LOG_KEEP)
-          .run();
+          );
+          flushes += 1;
+        } catch {
+          buffer = pending.concat(buffer).slice(-APP_LOG_BUFFER_MAX);
+          break;
+        }
+        if (flushes % APP_LOG_PRUNE_EVERY === 0) {
+          await target
+            .prepare("DELETE FROM app_log WHERE id NOT IN (SELECT id FROM app_log ORDER BY id DESC LIMIT ?1)")
+            .bind(APP_LOG_KEEP)
+            .run()
+            .catch(() => undefined);
+        }
       }
-    } catch {
-      void 0;
     } finally {
       flushing = null;
     }
   })();
-  return flushing;
+  flushing = run;
+  return run;
 }
 
 export interface AppLogRow {
@@ -104,6 +113,7 @@ export function registerAppLog(app: Hono<{ Bindings: Env }>) {
     await flushAppLog(c.env.DB);
     const category = c.req.query("category") ?? "";
     const kind = c.req.query("kind") ?? "";
+    const level = c.req.query("level") ?? "";
     const limit = Math.min(Number(c.req.query("limit") ?? 100) || 100, 100);
     const rows = category
       ? await c.env.DB.prepare("SELECT at, level, category, kind, profile_id AS profileId, message, url FROM app_log WHERE category = ? ORDER BY id DESC LIMIT ?")
@@ -113,9 +123,13 @@ export function registerAppLog(app: Hono<{ Bindings: Env }>) {
         ? await c.env.DB.prepare("SELECT at, level, category, kind, profile_id AS profileId, message, url FROM app_log WHERE kind = ? ORDER BY id DESC LIMIT ?")
             .bind(kind.slice(0, 40), limit)
             .all<AppLogRow & { profileId: string }>()
-        : await c.env.DB.prepare("SELECT at, level, category, kind, profile_id AS profileId, message, url FROM app_log ORDER BY id DESC LIMIT ?")
-            .bind(limit)
-            .all<AppLogRow & { profileId: string }>();
+        : level
+          ? await c.env.DB.prepare("SELECT at, level, category, kind, profile_id AS profileId, message, url FROM app_log WHERE level = ? ORDER BY id DESC LIMIT ?")
+              .bind(level.slice(0, 20), limit)
+              .all<AppLogRow & { profileId: string }>()
+          : await c.env.DB.prepare("SELECT at, level, category, kind, profile_id AS profileId, message, url FROM app_log ORDER BY id DESC LIMIT ?")
+              .bind(limit)
+              .all<AppLogRow & { profileId: string }>();
     return c.json({ entries: rows.results ?? [] });
   });
 

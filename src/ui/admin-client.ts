@@ -1004,7 +1004,8 @@ async function pageLogs(page) {
     ["meta", "Metadata"],
     ["catalog", "Catalogs"],
     ["sync", "Sync"],
-    ["error", "Errors"],
+    ["playstate", "Playstate"],
+    ["level:error", "Errors"],
   ];
   let activeCategory = "";
   let lastEntries = [];
@@ -1056,7 +1057,11 @@ async function pageLogs(page) {
   async function loadLogs() {
     logBox.innerHTML = "";
     logBox.appendChild(el("div", "loading-text", "Loading logs..."));
-    const query = activeCategory ? \`/api/admin/app-log?limit=100&category=\${encodeURIComponent(activeCategory)}\` : "/api/admin/app-log?limit=100";
+    const query = !activeCategory
+      ? "/api/admin/app-log?limit=100"
+      : activeCategory.indexOf("level:") === 0
+        ? \`/api/admin/app-log?limit=100&level=\${encodeURIComponent(activeCategory.slice(6))}\`
+        : \`/api/admin/app-log?limit=100&category=\${encodeURIComponent(activeCategory)}\`;
     const res = await call(query);
     logBox.innerHTML = "";
     lastEntries = res.status === 200 ? (res.body.entries || []) : [];
