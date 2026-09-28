@@ -6,7 +6,7 @@ import { verifiedOwner } from "./session";
 import { logApp } from "./applog";
 import { maybeMaintenance } from "./cron";
 import { catalogBases } from "./library";
-import { fetchMeta, indexedEpisodes, profileMeta, runtimeTicks, seasonEpisodes, seasonNumbers, videoEpisodeNumber } from "./meta";
+import { fetchMeta, indexedEpisodes, profileMeta, runtimeTicks, seasonEpisodes, seasonNumbers, videoEpisodeNumber, type StremioMeta } from "./meta";
 import {
   clearTombstone,
   deleteNuvioFavoriteFor,
@@ -86,6 +86,55 @@ function pushProgressToNuvioRpc(
     (async () => {
       const runtime = await nuvioRuntime(c.env.DB, owner, key);
       await pushNuvioProgressFor(c.env.DB, fetch, owner, key, positionTicks, runtime, now);
+    })(),
+  );
+}
+
+function seasonEpisodeKeys(
+  meta: StremioMeta,
+  decoded: NonNullable<ReturnType<typeof decodeItem>>,
+): string[] {
+  const seasons = decoded.kind === "season" ? [decoded.season ?? 0] : seasonNumbers(meta);
+  const keys: string[] = [];
+  for (const season of seasons) {
+    for (const episode of seasonEpisodes(meta, season)) {
+      const number = videoEpisodeNumber(episode);
+      if (number !== null && number !== undefined) keys.push(`episode:${decoded.stremioId}:${season}:${number}`);
+    }
+  }
+  return keys;
+}
+
+async function applyPlayedToEpisodeKeys(db: D1Database, owner: string, epKeys: string[], played: boolean, now: number): Promise<void> {
+  for (const epKey of epKeys) {
+    await setPlayed(db, owner, epKey, played, now);
+    await clearWatchPosition(db, owner, epKey, now);
+  }
+}
+
+function pushPlayedToEpisodeKeys(
+  c: Context<{ Bindings: Env }>,
+  owner: string,
+  epKeys: string[],
+  played: boolean,
+  now: number,
+): void {
+  background(
+    c,
+    (async () => {
+      for (const epKey of epKeys) {
+        if (played) {
+          await clearTombstone(c.env.DB, owner, "watched", epKey);
+          await pushNuvioWatchedFor(c.env.DB, fetch, owner, epKey, now);
+          await deleteNuvioProgressFor(c.env.DB, fetch, owner, epKey);
+          await recordTombstone(c.env.DB, owner, "progress", epKey, now);
+        } else {
+          await recordTombstone(c.env.DB, owner, "watched", epKey, now);
+          await recordTombstone(c.env.DB, owner, "progress", epKey, now);
+          await deleteNuvioWatchedFor(c.env.DB, fetch, owner, epKey);
+          await deleteNuvioProgressFor(c.env.DB, fetch, owner, epKey);
+        }
+      }
     })(),
   );
 }
@@ -272,51 +321,20 @@ export function registerSessions(app: Hono<{ Bindings: Env }>) {
   }
 
   async function playState(c: Context<{ Bindings: Env }>, played: boolean, scopedUserId?: string) {
-        const scope = await scopedSession(c, scopedUserId);
-    if (!scope.ok) {
-            return scope.response;
-    }
+    const scope = await scopedSession(c, scopedUserId);
+    if (!scope.ok) return scope.response;
     const { owner, key, itemId, now, decoded } = scope;
-    if (decoded?.kind === "season" || decoded?.kind === "series") {
+    if (decoded && (decoded.kind === "season" || decoded.kind === "series")) {
       const cache = typeof caches !== "undefined" ? caches.default : (null as unknown as Cache);
       const resolved = await profileMeta(c.env.DB, cache, fetch, owner, decoded.addonUrl, "series", decoded.stremioId).catch(() => null);
       if (resolved) {
-        const seasons = decoded.kind === "season" ? [decoded.season ?? 0] : seasonNumbers(resolved.meta);
-        const epKeys: string[] = [];
-        for (const s of seasons) {
-          for (const ep of seasonEpisodes(resolved.meta, s)) {
-            const epNum = videoEpisodeNumber(ep);
-            if (epNum !== null && epNum !== undefined) {
-              epKeys.push(`episode:${decoded.stremioId}:${s}:${epNum}`);
-            }
-          }
-        }
+        const epKeys = seasonEpisodeKeys(resolved.meta, decoded);
         if (key) {
           await setPlayed(c.env.DB, owner, key, played, now);
           await clearWatchPosition(c.env.DB, owner, key, now);
         }
-        for (const epKey of epKeys) {
-          await setPlayed(c.env.DB, owner, epKey, played, now);
-          await clearWatchPosition(c.env.DB, owner, epKey, now);
-        }
-        background(
-          c,
-          (async () => {
-            for (const epKey of epKeys) {
-              if (played) {
-                await clearTombstone(c.env.DB, owner, "watched", epKey);
-                await pushNuvioWatchedFor(c.env.DB, fetch, owner, epKey, now);
-                await deleteNuvioProgressFor(c.env.DB, fetch, owner, epKey);
-                await recordTombstone(c.env.DB, owner, "progress", epKey, now);
-              } else {
-                await recordTombstone(c.env.DB, owner, "watched", epKey, now);
-                await recordTombstone(c.env.DB, owner, "progress", epKey, now);
-                await deleteNuvioWatchedFor(c.env.DB, fetch, owner, epKey);
-                await deleteNuvioProgressFor(c.env.DB, fetch, owner, epKey);
-              }
-            }
-          })(),
-        );
+        await applyPlayedToEpisodeKeys(c.env.DB, owner, epKeys, played, now);
+        pushPlayedToEpisodeKeys(c, owner, epKeys, played, now);
         background(
           c,
           logApp(c.env.DB, {
@@ -381,11 +399,19 @@ export function registerSessions(app: Hono<{ Bindings: Env }>) {
     return playState(c, played, c.req.param("userId"));
   });
 
-  async function favoriteState(c: Context<{ Bindings: Env }>, isFav: boolean, scopedUserId?: string) {
+  type ScopedTarget = { owner: string; key: string; itemId: string; now: number };
+
+  async function scopedTarget(c: Context<{ Bindings: Env }>, scopedUserId?: string): Promise<ScopedTarget | Response> {
     const scope = await scopedSession(c, scopedUserId);
     if (!scope.ok) return scope.response;
-    const { owner, key, itemId, now } = scope;
-    if (!key) return c.json({ error: "not found" }, 404);
+    if (!scope.key) return c.json({ error: "not found" }, 404);
+    return { owner: scope.owner, key: scope.key, itemId: scope.itemId, now: scope.now };
+  }
+
+  async function favoriteState(c: Context<{ Bindings: Env }>, isFav: boolean, scopedUserId?: string) {
+    const target = await scopedTarget(c, scopedUserId);
+    if (target instanceof Response) return target;
+    const { owner, key, itemId, now } = target;
     const parsed = parseItemKey(key);
     const contentId = parsed?.stremioId ?? key;
     const contentType = parsed?.kind === "movie" ? "movie" : "series";
@@ -429,10 +455,9 @@ export function registerSessions(app: Hono<{ Bindings: Env }>) {
   }
 
   async function userDataState(c: Context<{ Bindings: Env }>, scopedUserId?: string) {
-    const scope = await scopedSession(c, scopedUserId);
-    if (!scope.ok) return scope.response;
-    const { owner, key, itemId, now } = scope;
-    if (!key) return c.json({ error: "not found" }, 404);
+    const target = await scopedTarget(c, scopedUserId);
+    if (target instanceof Response) return target;
+    const { owner, key, itemId, now } = target;
     let body: { Played?: unknown; PlaybackPositionTicks?: unknown } = {};
     try {
       body = (await c.req.json()) as { Played?: unknown; PlaybackPositionTicks?: unknown };
@@ -484,10 +509,9 @@ export function registerSessions(app: Hono<{ Bindings: Env }>) {
   app.delete("/UserFavoriteItems/:itemId", (c) => favoriteState(c, false));
 
   async function hiddenState(c: Context<{ Bindings: Env }>, hidden: boolean, scopedUserId?: string) {
-    const scope = await scopedSession(c, scopedUserId);
-    if (!scope.ok) return scope.response;
-    const { owner, key, now } = scope;
-    if (!key) return c.json({ error: "not found" }, 404);
+    const target = await scopedTarget(c, scopedUserId);
+    if (target instanceof Response) return target;
+    const { owner, key, now } = target;
     if (!hidden) {
       await unhideItem(c.env.DB, owner, key);
       return c.json({});
@@ -517,21 +541,19 @@ export function registerSessions(app: Hono<{ Bindings: Env }>) {
     return c.json({ ItemId: itemId, Likes: likes, IsFavorite: false });
   }
 
-  app.post("/Users/:userId/Items/:itemId/Rating", (c) => {
+  function ratingQuery(c: Context<{ Bindings: Env }>) {
     const itemId = c.req.param("itemId") ?? "";
     const likes = c.req.query("Likes") ?? c.req.query("likes");
     return ratingResponse(c, itemId, likes === "true" ? true : likes === "false" ? false : null);
-  });
+  }
+
+  app.post("/Users/:userId/Items/:itemId/Rating", ratingQuery);
   app.delete("/Users/:userId/Items/:itemId/Rating", (c) => ratingResponse(c, c.req.param("itemId") ?? "", null));
   app.post("/Users/:userId/Items/:itemId/Rating/Like", (c) => ratingResponse(c, c.req.param("itemId") ?? "", true));
   app.post("/Users/:userId/Items/:itemId/Rating/Dislike", (c) => ratingResponse(c, c.req.param("itemId") ?? "", false));
   app.delete("/Users/:userId/Items/:itemId/Rating/Like", (c) => ratingResponse(c, c.req.param("itemId") ?? "", null));
   app.delete("/Users/:userId/Items/:itemId/Rating/Dislike", (c) => ratingResponse(c, c.req.param("itemId") ?? "", null));
-  app.post("/UserItems/:itemId/Rating", (c) => {
-    const itemId = c.req.param("itemId") ?? "";
-    const likes = c.req.query("Likes") ?? c.req.query("likes");
-    return ratingResponse(c, itemId, likes === "true" ? true : likes === "false" ? false : null);
-  });
+  app.post("/UserItems/:itemId/Rating", ratingQuery);
   app.delete("/UserItems/:itemId/Rating", (c) => ratingResponse(c, c.req.param("itemId") ?? "", null));
   app.post("/UserItems/:itemId/Rating/Like", (c) => ratingResponse(c, c.req.param("itemId") ?? "", true));
   app.post("/UserItems/:itemId/Rating/Dislike", (c) => ratingResponse(c, c.req.param("itemId") ?? "", false));

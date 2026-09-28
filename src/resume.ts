@@ -65,6 +65,36 @@ function userDataForRow(row: WatchRow, runTimeTicks: number | null): Record<stri
   return data;
 }
 
+function lastPlayedIndex(
+  videos: { season: number; episode: number }[],
+  stateFor: (season: number, episode: number) => WatchRow | undefined,
+): number {
+  let lastPlayed = -1;
+  videos.forEach((entry, i) => {
+    const row = stateFor(entry.season, entry.episode);
+    if (row !== undefined && row.played === 1) lastPlayed = i;
+  });
+  return lastPlayed;
+}
+
+function seriesItemUserData(
+  key: string,
+  row: WatchRow | undefined,
+  runTimeTicks: number | null,
+  lastActivity: number,
+): Record<string, unknown> {
+  if (row) return { Key: key, ItemId: key, ...userDataForRow(row, runTimeTicks) };
+  return {
+    Key: key,
+    ItemId: key,
+    Played: false,
+    PlaybackPositionTicks: 0,
+    PlayCount: 0,
+    IsFavorite: false,
+    ...(lastActivity > 0 ? { LastPlayedDate: new Date(lastActivity * 1000).toISOString() } : {}),
+  };
+}
+
 function prettyNameFor(stremioId: string): string {
   const tmdb = /^tmdb:(\d+)$/i.exec(stremioId);
   if (tmdb) return `TMDB ${tmdb[1]}`;
@@ -215,11 +245,7 @@ async function nextUpCandidateDto(
   if (videos.length === 0) return null;
   const stateFor = (season: number, episode: number) => group.byEp.get(`${season}:${episode}`);
 
-  let lastPlayed = -1;
-  videos.forEach((entry, i) => {
-    const row = stateFor(entry.season, entry.episode);
-    if (row !== undefined && row.played === 1) lastPlayed = i;
-  });
+  let lastPlayed = lastPlayedIndex(videos, stateFor);
 
   if (lastPlayed < 0) return null;
   const candidate = videos[lastPlayed + 1];
@@ -250,17 +276,7 @@ async function nextUpCandidateDto(
   if (!dto) return fallbackItem();
 
   const key = String(dto.Id ?? "");
-  dto.UserData = candidateRow
-    ? { Key: key, ItemId: key, ...userDataForRow(candidateRow, runtimeTicks(resolved.meta.runtime)) }
-    : {
-        Key: key,
-        ItemId: key,
-        Played: false,
-        PlaybackPositionTicks: 0,
-        PlayCount: 0,
-        IsFavorite: false,
-        ...(group.lastActivity > 0 ? { LastPlayedDate: new Date(group.lastActivity * 1000).toISOString() } : {}),
-      };
+  dto.UserData = seriesItemUserData(key, candidateRow, runtimeTicks(resolved.meta.runtime), group.lastActivity);
 
   return dto;
 }
@@ -408,11 +424,7 @@ async function nextUpItems(
       if (current) picked = { season: current.season, episode: current.episode };
     }
     if (!picked) {
-      let lastPlayed = -1;
-      videos.forEach((entry, i) => {
-        const row = stateFor(entry.season, entry.episode);
-        if (row !== undefined && row.played === 1) lastPlayed = i;
-      });
+      const lastPlayed = lastPlayedIndex(videos, stateFor);
       if (lastPlayed >= 0) {
         const candidate = videos[lastPlayed + 1];
         if (candidate) {
@@ -451,17 +463,7 @@ async function nextUpItems(
     }
     const row = stateFor(picked.season, picked.episode);
     const key = String(dto.Id ?? "");
-    dto.UserData = row
-      ? { Key: key, ItemId: key, ...userDataForRow(row, runtimeTicks(resolved.meta.runtime)) }
-      : {
-          Key: key,
-          ItemId: key,
-          Played: false,
-          PlaybackPositionTicks: 0,
-          PlayCount: 0,
-          IsFavorite: false,
-          ...(group.lastActivity > 0 ? { LastPlayedDate: new Date(group.lastActivity * 1000).toISOString() } : {}),
-        };
+    dto.UserData = seriesItemUserData(key, row, runtimeTicks(resolved.meta.runtime), group.lastActivity);
     items.push(dto);
   }
   return { items, total };

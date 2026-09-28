@@ -28,9 +28,9 @@ export interface NuvioProfile {
   updated_at?: string;
 }
 
-export const NUVIO_AVATAR_STORAGE_BASE = "https://api.nuvio.tv/storage/v1/object/public/avatars";
+const NUVIO_AVATAR_STORAGE_BASE = "https://api.nuvio.tv/storage/v1/object/public/avatars";
 
-export const NUVIO_BUILTIN_AVATARS: Record<string, string> = {
+const NUVIO_BUILTIN_AVATARS: Record<string, string> = {
   avatar_lalo: "animals/bram-v1.png",
   avatar_lara: "animals/clover-v1.png",
   avatar_levi: "animals/pip-v1.png",
@@ -75,7 +75,7 @@ export const NUVIO_BUILTIN_AVATARS: Record<string, string> = {
   avatar_moss: "sketches/moss-v1.png",
 };
 
-export const NUVIO_BUILTIN_AVATAR_BY_NAME: Record<string, string> = {
+const NUVIO_BUILTIN_AVATAR_BY_NAME: Record<string, string> = {
   bram: "animals/bram-v1.png",
   clover: "animals/clover-v1.png",
   pip: "animals/pip-v1.png",

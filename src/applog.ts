@@ -1,3 +1,4 @@
+import type { D1PreparedStatement } from "@cloudflare/workers-types";
 import type { Hono } from "hono";
 import type { Env } from "./db";
 import { adminOwner } from "./session";
@@ -107,29 +108,32 @@ export function clientInfo(req: Request): { client: string; device: string } {
   return { client: client.slice(0, 64), device: device.slice(0, 64) };
 }
 
+function appLogQuery(
+  db: D1Database,
+  filter: { category: string; kind: string; level: string },
+  limit: number,
+): D1PreparedStatement {
+  const select = "SELECT at, level, category, kind, profile_id AS profileId, message, url FROM app_log";
+  if (filter.category) return db.prepare(`${select} WHERE category = ? ORDER BY id DESC LIMIT ?`).bind(filter.category.slice(0, 40), limit);
+  if (filter.kind) return db.prepare(`${select} WHERE kind = ? ORDER BY id DESC LIMIT ?`).bind(filter.kind.slice(0, 40), limit);
+  if (filter.level) return db.prepare(`${select} WHERE level = ? ORDER BY id DESC LIMIT ?`).bind(filter.level.slice(0, 20), limit);
+  return db.prepare(`${select} ORDER BY id DESC LIMIT ?`).bind(limit);
+}
+
 export function registerAppLog(app: Hono<{ Bindings: Env }>) {
   app.get("/api/admin/app-log", async (c) => {
     if (!(await adminOwner(c))) return c.json({ error: "unauthorized" }, 401);
     await flushAppLog(c.env.DB);
-    const category = c.req.query("category") ?? "";
-    const kind = c.req.query("kind") ?? "";
-    const level = c.req.query("level") ?? "";
     const limit = Math.min(Number(c.req.query("limit") ?? 100) || 100, 100);
-    const rows = category
-      ? await c.env.DB.prepare("SELECT at, level, category, kind, profile_id AS profileId, message, url FROM app_log WHERE category = ? ORDER BY id DESC LIMIT ?")
-          .bind(category.slice(0, 40), limit)
-          .all<AppLogRow & { profileId: string }>()
-      : kind
-        ? await c.env.DB.prepare("SELECT at, level, category, kind, profile_id AS profileId, message, url FROM app_log WHERE kind = ? ORDER BY id DESC LIMIT ?")
-            .bind(kind.slice(0, 40), limit)
-            .all<AppLogRow & { profileId: string }>()
-        : level
-          ? await c.env.DB.prepare("SELECT at, level, category, kind, profile_id AS profileId, message, url FROM app_log WHERE level = ? ORDER BY id DESC LIMIT ?")
-              .bind(level.slice(0, 20), limit)
-              .all<AppLogRow & { profileId: string }>()
-          : await c.env.DB.prepare("SELECT at, level, category, kind, profile_id AS profileId, message, url FROM app_log ORDER BY id DESC LIMIT ?")
-              .bind(limit)
-              .all<AppLogRow & { profileId: string }>();
+    const rows = await appLogQuery(
+      c.env.DB,
+      {
+        category: c.req.query("category") ?? "",
+        kind: c.req.query("kind") ?? "",
+        level: c.req.query("level") ?? "",
+      },
+      limit,
+    ).all<AppLogRow & { profileId: string }>();
     return c.json({ entries: rows.results ?? [] });
   });
 

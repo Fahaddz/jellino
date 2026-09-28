@@ -13,30 +13,17 @@ export function cacheKey(url: string): Request {
   return new Request(url, { method: "GET" });
 }
 
+const BLOCKED_HOST_SUFFIXES = [".localhost", ".local", ".internal"];
+const PRIVATE_IPV4_PATTERN =
+  /^(?:(?:0|10|127)\.\d{1,3}\.\d{1,3}\.\d{1,3}|169\.254\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}|198\.1[89]\.\d{1,3}\.\d{1,3})$/;
+
 function isPrivateHost(hostname: string): boolean {
   const host = hostname.trim().toLowerCase().replace(/^\[|\]$/g, "");
-  if (!host || host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) {
-    return true;
-  }
+  if (!host || host === "localhost" || BLOCKED_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix))) return true;
   if (host.includes(":")) {
-    return host === "::" || host === "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe8") || host.startsWith("fe9") || host.startsWith("fea") || host.startsWith("feb");
+    return host === "::" || host === "::1" || host.startsWith("fc") || host.startsWith("fd") || /^fe[89ab]/.test(host);
   }
-  const parts = host.split(".");
-  if (parts.length === 4 && parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255)) {
-    const a = Number(parts[0]);
-    const b = Number(parts[1]);
-    return (
-      a === 0 ||
-      a === 10 ||
-      a === 127 ||
-      (a === 169 && b === 254) ||
-      (a === 192 && b === 168) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 100 && b >= 64 && b <= 127) ||
-      (a === 198 && (b === 18 || b === 19))
-    );
-  }
-  return false;
+  return PRIVATE_IPV4_PATTERN.test(host);
 }
 
 export function upstreamFetch(

@@ -43,7 +43,9 @@ async function logCatalogFailure(
   base: string,
   type: string,
   id: string,
+  failed: boolean,
 ): Promise<void> {
+  if (!failed) return;
   await logFailureThrottled(db, `catalog:${profileId}:${base}:${type}:${id}`, {
     at: Math.floor(Date.now() / 1000),
     level: "error",
@@ -312,7 +314,7 @@ export async function profileCatalogItems(
       window,
       extraBase ?? null,
     );
-    if (page.failed) await logCatalogFailure(db, profileId, view.addonUrl, view.catalogType, view.catalogId);
+    await logCatalogFailure(db, profileId, view.addonUrl, view.catalogType, view.catalogId, page.failed);
     const metas = hideUnreleased ? page.metas.filter((meta) => !isUnreleased(meta)) : page.metas;
     await rememberCatalogArt(cache, view.addonUrl, metas, null);
     return {
@@ -363,7 +365,7 @@ async function boxsetItems(
       ref.id,
       { start: 0, limit: reach },
     );
-    if (page.failed) await logCatalogFailure(db, profileId, ref.base, ref.type, ref.id);
+    await logCatalogFailure(db, profileId, ref.base, ref.type, ref.id, page.failed);
     hasMore = hasMore || page.hasMore;
     for (const meta of page.metas) {
       const key = `${meta.type}:${meta.id}`;
@@ -410,7 +412,7 @@ export async function personFilmography(
         window,
         `search=${encodeURIComponent(name)}`,
       );
-      if (page.failed) await logCatalogFailure(db, profileId, target.base, target.type, target.id);
+      await logCatalogFailure(db, profileId, target.base, target.type, target.id, page.failed);
       for (const meta of page.metas) {
         const key = `${meta.type}:${meta.id}`;
         if (seen.has(key)) continue;
