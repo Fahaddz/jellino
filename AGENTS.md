@@ -195,7 +195,7 @@ Key owners: AIOMetadata (subtitles, metadata, segments, streams DTOs), Remux (Je
   3. **Character Encoding Detection:** Upstream assumes raw UTF-8 strings (`raw.toString('utf8')`), breaking Arabic and non-Latin subtitles. Jellino implements `decodeSubtitleBytes` detecting UTF-8/UTF-16 BOMs and legacy code pages (Windows-1256 for Arabic, Windows-1250/1251/1252, Shift-JIS, GBK).
   4. **Transparent Decompression:** Jellino includes `decompressIfNeeded` to unpack `.srt.gz` responses from Stremio subtitle addons (which crash or serve binary upstream).
   5. **Cloudflare Cache & Dynamic Rebuild:** Upstream uses in-process Node `LRUCache`. Jellino uses Cloudflare Cache API (`caches.default`) with fallback reconstruction via `rebuildOffer` if the edge cache expires.
-  6. **Observability Logging:** Jellino logs every subtitle request, latency, payload size, and outcome to D1 `subtitle_log` via `logSubtitleServe`.
+  6. **Observability Logging:** Jellino logs every subtitle request, latency, payload size, and outcome to D1 `app_log` (category `subtitle`) via `logSubtitleServe`.
 - **How to Sync Future Upstream Updates:**
   1. Run `git -C tmp/aiometadata fetch origin && git -C tmp/aiometadata diff 44bacb1bd4a9e80ac27749419822b0e441f560d4..origin/feat/jellyfin-server -- addon/lib/jellyfin/subtitles.ts addon/lib/jellyfin/index.ts`
   2. If upstream changed subtitle parsing, formatting, or routing, port the logic to `src/subtitles.ts` or `src/playback.ts` while preserving the 6 deliberate deviations above.

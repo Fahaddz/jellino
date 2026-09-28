@@ -139,7 +139,7 @@ Access at `https://<your-worker>.workers.dev/admin`:
 - **Addon Manager** &mdash; overview of synced addons, health metrics, and direct link to Nuvio's addon manager.
 - **Nuvio Profiles** &mdash; imported profiles, per-profile client passwords, and TV pairing.
 - **General Settings** &mdash; optional PublicMetaDB API key (skip intros) and TMDB API key (person pages).
-- **Logs & Debug** &mdash; real-time timestamped event logs for streams, subtitles, catalogs, and sync events with category filters and copy support.
+- **Logs & Debug** &mdash; real-time timestamped event logs for streams, subtitles, catalogs, and sync events with category/level filters, client attribution, and copy support.
 
 ---
 
@@ -151,9 +151,11 @@ bun run dev        # wrangler dev with local D1 (wrangler.local.toml)
 bun run test       # vitest test suite with in-memory D1
 bun run typecheck  # TypeScript compiler check
 bun run deploy     # Deploy to Cloudflare Workers
+bunx fallow        # Static analysis: dead code, duplication, complexity
+bunx fallow audit --base origin/main  # Gate only findings a change introduces
 ```
 
-`src/` carries zero comments by rule (enforced in CI). Reference checkouts live in `tmp/` and are gitignored.
+`src/` carries zero comments by rule (enforced in CI). Reference checkouts live in `tmp/` and are gitignored. Fallow's `.fallowrc.json` treats the test suite as entry points so test-only usage is not reported as dead code.
 
 ---
 

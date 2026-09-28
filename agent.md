@@ -85,7 +85,7 @@ This document serves as the single source of truth for AI agents and developers 
 >
 > **Before changing anything subtitle-related:** check `tmp/aiometadata` on `feat/jellyfin-server` against pinned commit `44bacb1b`. Jellino's subtitle implementation must stay **1:1 with AIOMetadata** — same cue parsing, same `pickSubtitles`, same advertised field set, same format negotiation, same conversion, same 502-on-failure.
 >
-> **Intentional Deviations:** (1) `SUBTITLES_PER_LANGUAGE = 8` (upstream default is 3), (2) multi-addon fanout querying all enabled subtitle addons, (3) legacy character encoding auto-detection (`decodeSubtitleBytes`, e.g. Windows-1256 Arabic) where upstream assumes UTF-8, (4) transparent gzip decompression (`decompressIfNeeded` for `.srt.gz`), (5) Cloudflare Cache API with `rebuildOffer` fallback, (6) D1 `subtitle_log` observability.
+> **Intentional Deviations:** (1) `SUBTITLES_PER_LANGUAGE = 8` (upstream default is 3), (2) multi-addon fanout querying all enabled subtitle addons, (3) legacy character encoding auto-detection (`decodeSubtitleBytes`, e.g. Windows-1256 Arabic) where upstream assumes UTF-8, (4) transparent gzip decompression (`decompressIfNeeded` for `.srt.gz`), (5) Cloudflare Cache API with `rebuildOffer` fallback, (6) unified D1 `app_log` observability (category `subtitle`).
 
 The pipeline is **list → pick → advertise → click → fetch/convert → serve**, deliberately the same method as AIOMetadata's Jellyfin integration: no proxying, no retry chain, no fallback bodies. A click either serves the converted file or answers 502.
 
@@ -109,7 +109,7 @@ The pipeline is **list → pick → advertise → click → fetch/convert → se
 - **Edge Caches:** List responses, converted bodies, and offered menus live in the edge cache for one hour each; nothing subtitle-related is written to R2, and maintenance does not prune subtitle objects.
 
 **5. Observability**
-- **Forensic Subtitle Log:** Every serve, 401, 404, and 502 lands in `subtitle_log` (timestamp, item, track, format, outcome, exact upstream URL, bytes, latency, profile). A subtitle-shaped path no route matches is logged as `404 unmatched route`; a `//Videos/...` double-slash path is rewritten in place (no 308) and logged as `double-slash rewritten` so clients that concatenate `baseUrl + DeliveryUrl` still get a body.
+- **Forensic Subtitle Log:** Every serve, 401, 404, and 502 lands in D1 `app_log` under category `subtitle` (timestamp, item, track, format, outcome, exact upstream URL, bytes, latency, profile). A subtitle-shaped path no route matches is logged as `404 unmatched route`; a `//Videos/...` double-slash path is rewritten in place (no 308) and logged as `double-slash rewritten` so clients that concatenate `baseUrl + DeliveryUrl` still get a body. Failures also record the offer state (`src`, `embedded`, track count, `recalled`/`rebuilt`) so a stale index is diagnosable from the log alone.
 - **Menu Row:** A playback `PlaybackInfo` writes one `menu: N external, M embedded · <client> on <device>` row per item per five minutes, so "the client never asked" is distinguishable from "the server advertised nothing".
 
 ### B. Metadata Delivery (AIOMetadata Method)
@@ -199,7 +199,7 @@ The pipeline is **list → pick → advertise → click → fetch/convert → se
 
 ## 4. Database Schema (Cloudflare D1)
 
-All tables are initialized via a single idempotent migration [`migrations/0001_init.sql`](migrations/0001_init.sql) and mirrored in [`src/schema.ts`](src/schema.ts). Because `CREATE TABLE IF NOT EXISTS` cannot add a column to a table that already exists, `ensureSchema` also runs a self-healing column upgrade on first request per isolate: it reads `PRAGMA table_info` per table and issues `ALTER TABLE ... ADD COLUMN` for any column an older live database is missing (subtitle log `url`, addon health `latency_ms`, watch-state source/subtitle columns, and profile Nuvio/avatar columns), so a database created by an early build can never silently lose logging or watch state. The subtitle log write and admin read also fall back to the pre-`url` column shape if the upgrade has not run yet:
+All tables are initialized via a single idempotent migration [`migrations/0001_init.sql`](migrations/0001_init.sql) and mirrored in [`src/schema.ts`](src/schema.ts). Because `CREATE TABLE IF NOT EXISTS` cannot add a column to a table that already exists, `ensureSchema` also runs a self-healing column upgrade on first request per isolate: it reads `PRAGMA table_info` per table and issues `ALTER TABLE ... ADD COLUMN` for any column an older live database is missing (profile Nuvio/avatar/disabled/token-epoch columns, watch-state source/subtitle columns, addon health `latency_ms`, and `app_log` `url`/`category`), so a database created by an early build can never silently lose logging or watch state. Legacy tables from early builds (`active_sessions`, `subtitle_log`, `display_prefs`) are dropped on startup; all logs now live in `app_log`:
 
 - `profiles`: User accounts, admin flags, Nuvio mapping, avatar colors/URLs, and token epochs.
 - `profile_addons`: Per-profile enabled Stremio addons, URLs, and display order.
@@ -209,9 +209,9 @@ All tables are initialized via a single idempotent migration [`migrations/0001_i
 - `settings`: Key-value server settings.
 - `quick_connect`: 6-digit code authentication state machine.
 - `addon_health`: Failure counts, error messages, and upstream query latency (`latency_ms`) per addon.
-- `subtitle_log`: Audit log of subtitle serves, formats, latencies, and errors.
-- `app_log`: General application and diagnostic log.
-- `display_prefs`: Per-client Jellyfin display preferences (home screen row layouts).
+- `hidden_items`: Per-profile Continue Watching / Next Up exclusions.
+- `sync_tombstones`: Causal delete markers that keep stale Nuvio snapshots from resurrecting removed state.
+- `app_log`: Unified application log (subtitle, stream, meta, catalog, sync, playstate, route404) with `category`/`kind`/`level` filters and 7-day retention.
 
 ---
 
