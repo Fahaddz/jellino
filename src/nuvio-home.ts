@@ -35,6 +35,7 @@ import {
   type NuvioSnapshotRef,
 } from "./library";
 import { MAX_RESUME_PCT, setPlayed, writeWatchPosition } from "./watch-state";
+import { bumpTokenEpoch } from "./session";
 
 export interface NuvioHomeItem {
   addon_id: string;
@@ -1349,7 +1350,8 @@ export async function syncFromNuvio(
 
     for (const existing of existingList) {
       if (existing.nuvio_profile_id && !activeNuvioIds.has(existing.nuvio_profile_id)) {
-        await db.prepare("UPDATE profiles SET disabled = 1, token_epoch = token_epoch + 1 WHERE id = ?").bind(existing.id).run();
+        await db.prepare("UPDATE profiles SET disabled = 1 WHERE id = ?").bind(existing.id).run();
+        await bumpTokenEpoch(db, existing.id);
       }
     }
 

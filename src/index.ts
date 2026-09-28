@@ -10,7 +10,7 @@ import { renderHomePage } from "./ui/home";
 import { ADMIN_CLIENT_JS } from "./ui/admin-client";
 import { ADMIN_CSS } from "./ui/admin-css";
 import { REMUX_THEME_CSS } from "./ui/remux-css";
-import { authenticateByName, bearerToken, findProfile, issueToken, listProfiles, ownerForRequest, publicDto, rateAllow, readCredentials, userDto, verifiedOwner, verifyToken } from "./session";
+import { authenticateByName, bearerToken, clearProfileDisabledCache, findProfile, issueToken, listProfiles, ownerForRequest, publicDto, rateAllow, readCredentials, userDto, verifiedOwner, verifyToken } from "./session";
 import { collectionTileInfo, collectionsFolderDto, profileCollections, profileLibraries, profileLibrarySplit, profileViewItem, catalogBases, viewDisplayName } from "./library";
 import { isHiddenItem } from "./hidden";
 import { csvSet, imageWidth, pageParams, queryIgnoreCase } from "./query";
@@ -1033,15 +1033,11 @@ const itemDtoMemoryCache = new Map<string, { dto: Record<string, unknown>; expir
     }
     const person = decodePerson(id);
     if (person) {
-      const personKey = new Request(`https://jellino.local/person-img/${encodeURIComponent(person.toLowerCase())}/${widthClass(width)}`, {
+      const personKey = new Request(`https://jellino.local/person-img/v2/${encodeURIComponent(person.toLowerCase())}/${widthClass(width)}`, {
         method: "GET",
       });
       const tagged = artUrlAllowed(photoFromImageTag(queryIgnoreCase(c, "tag")));
-      if (tagged) {
-        const res = redirectResponse(tagged);
-        await caches.default.put(personKey, res.clone());
-        return res;
-      }
+      if (tagged) return redirectResponse(tagged);
       const cachedPerson = await caches.default.match(personKey);
       if (cachedPerson) return cachedPerson;
       const photo = await readPersonPhoto(caches.default, person);
@@ -1184,13 +1180,14 @@ const itemDtoMemoryCache = new Map<string, { dto: Record<string, unknown>; expir
     if (credentials instanceof Response) return credentials;
 
     const admin = await c.env.DB
-      .prepare("SELECT id, name, is_admin FROM profiles WHERE is_admin = 1 ORDER BY created_at ASC LIMIT 1")
-      .first<{ id: string; name: string; is_admin: number }>();
+      .prepare("SELECT id, name, is_admin, disabled FROM profiles WHERE is_admin = 1 ORDER BY created_at ASC LIMIT 1")
+      .first<{ id: string; name: string; is_admin: number; disabled: number }>();
 
     if (admin) {
+      if (admin.disabled === 1) return c.json({ error: "invalid credentials" }, 401);
       const existingAccount = await readNuvioAccount(c.env.DB);
       const configuredEmail = (await readSetting(c.env.DB, "admin_email")) || existingAccount?.email;
-      if (configuredEmail && configuredEmail.trim().toLowerCase() !== credentials.email.trim().toLowerCase()) {
+      if (!configuredEmail || configuredEmail.trim().toLowerCase() !== credentials.email.trim().toLowerCase()) {
         return c.json({ error: "invalid credentials" }, 401);
       }
     }
@@ -1202,14 +1199,15 @@ const itemDtoMemoryCache = new Map<string, { dto: Record<string, unknown>; expir
 
     await writeSetting(c.env.DB, "admin_email", signIn.email.trim().toLowerCase());
 
-    let effectiveAdmin = admin;
+    let effectiveAdmin: { id: string; name: string; is_admin: number } | null = admin;
     if (effectiveAdmin) {
       const salt = newSalt();
       const passwordHash = await hashPassword(credentials.password, salt);
       await c.env.DB
-        .prepare("UPDATE profiles SET password_hash = ?, salt = ? WHERE id = ?")
+        .prepare("UPDATE profiles SET password_hash = ?, salt = ?, token_epoch = token_epoch + 1 WHERE id = ?")
         .bind(passwordHash, salt, effectiveAdmin.id)
         .run();
+      clearProfileDisabledCache(c.env.DB, effectiveAdmin.id);
     } else {
       const profilesRes = await nuvioPullProfiles(fetch, signIn.session.access_token);
       const nuvioProfiles: NuvioProfile[] = profilesRes.profiles ?? [];
@@ -1238,6 +1236,7 @@ const itemDtoMemoryCache = new Map<string, { dto: Record<string, unknown>; expir
     } catch {
       void 0;
     }
+    if (!effectiveAdmin) return c.json({ error: "not found" }, 500);
     const token = await issueToken(c.env.DB, effectiveAdmin.id, now);
 
     return c.json({

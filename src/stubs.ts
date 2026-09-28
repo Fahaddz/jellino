@@ -34,17 +34,15 @@ export function registerStubs(app: Hono<{ Bindings: Env }>, serverId: string): v
     if (!clean) return c.json({ error: "not found" }, 404);
     const width = imageWidth(c);
     const tier = width !== null && width > 500 ? "lg" : "sm";
-    const cacheKey = new Request(`https://jellino.local/person/${encodeURIComponent(clean.toLowerCase())}/${normalizedKind}/${tier}`, {
+    const cacheKey = new Request(`https://jellino.local/person/v2/${encodeURIComponent(clean.toLowerCase())}/${normalizedKind}/${tier}`, {
       method: "GET",
     });
     const tagged = photoFromImageTag(c.req.query("tag") ?? c.req.query("Tag"));
     if (tagged) {
-      const res = new Response(null, {
+      return new Response(null, {
         status: 302,
         headers: { location: tagged, "cache-control": "public, max-age=604800" },
       });
-      await caches.default.put(cacheKey, res.clone());
-      return res;
     }
     const cached = await caches.default.match(cacheKey);
     if (cached) return cached;

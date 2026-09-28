@@ -109,4 +109,25 @@ describe("upstreamFetch timeout", () => {
     const res = await upstreamFetch(impl, "https://addon.example/ok.json", { headers: { accept: "application/json" } });
     expect(res.ok).toBe(true);
   });
+
+  it("refuses localhost, private and link-local upstream targets", async () => {
+    const impl = async () => new Response("{}");
+    for (const url of [
+      "http://localhost/admin",
+      "http://127.0.0.1/admin",
+      "http://10.0.0.5/admin",
+      "http://192.168.1.50/admin",
+      "http://172.16.4.1/admin",
+      "http://169.254.169.254/latest/meta-data",
+      "http://100.64.0.1/admin",
+      "http://[::1]/admin",
+      "http://0.0.0.0/admin",
+      "http://router.local/admin",
+      "ftp://addon.example/file",
+    ]) {
+      await expect(upstreamFetch(impl, url)).rejects.toThrow("blocked upstream target");
+    }
+    const res = await upstreamFetch(impl, "https://addon.example/meta/movie/tt1.json");
+    expect(res.ok).toBe(true);
+  });
 });

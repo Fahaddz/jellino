@@ -8,6 +8,7 @@ import {
   verifyPassword,
 } from "../src/auth";
 import { callApp, createFakeDb, testEnv } from "./fake-db";
+import { verifyToken } from "../src/session";
 
 type Db = import("@cloudflare/workers-types").D1Database;
 
@@ -144,6 +145,50 @@ describe("profile bootstrap", () => {
       expect(attacker.status).toBe(401);
       const err = await attacker.json() as { error: string };
       expect(err.error).toBe("invalid credentials");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("bumps the token epoch when the nuvio login rewrites the admin password", async () => {
+    const raw = createFakeDb();
+    const db = raw as unknown as Db;
+    const app = createApp();
+    const env = testEnv(raw);
+
+    const mockFetch = (async (url: string | URL) => {
+      const u = String(url);
+      if (u.includes("/auth/v1/token")) {
+        return new Response(JSON.stringify({
+          access_token: "tok-123",
+          refresh_token: "ref-123",
+          expires_in: 3600,
+          user: { id: "u-123", email: "dad@nuvio.tv" }
+        }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify([]), { status: 200, headers: { "Content-Type": "application/json" } });
+    }) as unknown as typeof fetch;
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = mockFetch;
+    try {
+      const first = await callApp(app, env, "/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "CF-Connecting-IP": "1.2.3.4" },
+        body: JSON.stringify({ email: "dad@nuvio.tv", password: "mypassword123" }),
+      });
+      expect(first.status).toBe(200);
+      const firstToken = ((await first.json()) as { token: string }).token;
+      const now = Math.floor(Date.now() / 1000);
+      expect(await verifyToken(db, firstToken, now)).toBeTruthy();
+
+      const second = await callApp(app, env, "/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "CF-Connecting-IP": "5.6.7.8" },
+        body: JSON.stringify({ email: "dad@nuvio.tv", password: "mypassword123" }),
+      });
+      expect(second.status).toBe(200);
+      expect(await verifyToken(db, firstToken, now)).toBeNull();
     } finally {
       globalThis.fetch = originalFetch;
     }

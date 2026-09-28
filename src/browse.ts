@@ -27,6 +27,7 @@ import {
   profileHiddenCatalogs,
   profileLibraries,
   readNuvioHomeSnapshot,
+  stremioSegment,
   type FetchedManifest,
   type LibraryMediaKind,
   type StremioCatalog,
@@ -96,7 +97,7 @@ export async function catalogMetas(
   id: string,
   extra: string | null,
 ): Promise<StremioMeta[]> {
-  const target = `${normalizeBase(base)}/catalog/${type}/${id}${extra ? `/${extra}` : ""}.json`;
+  const target = `${normalizeBase(base)}/catalog/${stremioSegment(type)}/${stremioSegment(id)}${extra ? `/${extra}` : ""}.json`;
   try {
     const outcome = await cachedJson<{ metas?: StremioMeta[] }>(cache, target, CATALOG_TTL_SECONDS, async () => {
       const res = await upstreamFetch(fetchImpl, target, { headers: { accept: "application/json" } });
@@ -548,7 +549,7 @@ export async function artworkUrl(
       }
     }
   }
-  const target = `${decoded.addonUrl}/meta/${decoded.kind === "movie" ? "movie" : "series"}/${decoded.stremioId}.json`;
+  const target = `${decoded.addonUrl}/meta/${decoded.kind === "movie" ? "movie" : "series"}/${stremioSegment(decoded.stremioId)}.json`;
   let meta: StremioMeta | undefined;
   try {
     const metaOutcome = await cachedJson<{ meta?: StremioMeta }>(cache, target, 86400, () => fetchMetaJson(fetchImpl, target));

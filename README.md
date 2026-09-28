@@ -87,7 +87,16 @@ Jellino adopts proven patterns from established open-source projects rather than
 
 `docs/reference-projects.md` lists the pinned commit for each project and the procedure for pulling upstream changes.
 
-Upstream-sync deviation: subtitle offers are written only by the playback-menu path and are rebuilt when a client requests an index the cached offer no longer holds. Upstream rebuilds only a missing cache entry, so a stale or truncated offer 404s; Jellino retries once before answering 404.
+### Deliberate deviations from the references
+
+| Feature | Reference behavior | Jellino behavior | Why |
+| :--- | :--- | :--- | :--- |
+| Subtitle tracks per language | 3 (`JELLYFIN_SUBTITLES_PER_LANGUAGE`) | 8, total still capped at 40 | More choice per language without unbounded menus. |
+| Subtitle addon fanout | Queries one stream addon base | Queries all enabled subtitle-capable addons | Mirrors the profile's Nuvio addon list. |
+| Subtitle text decoding | Assumes raw UTF-8 | BOM/UTF-16 detection, legacy code pages, gzip | Arabic and non-Latin subtitles from real addons. |
+| Subtitle offer store | Rebuilds only on a cache miss | Rebuilds once on a stale index; item-detail requests never write offers | Keeps the playback menu and the clicked track consistent. |
+| Logout (`/Sessions/Logout`) | Revokes the calling access token | Local-only; revoke devices by setting a new client password (bumps the token epoch) | No server-side session store on the free tier. |
+| Artwork URLs | Served from local files | 302 redirect to provider CDNs, never host-restricted | Required for Stremio addon artwork; only the Worker's own fetch targets are validated. |
 
 ---
 

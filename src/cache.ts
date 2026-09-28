@@ -13,12 +13,47 @@ export function cacheKey(url: string): Request {
   return new Request(url, { method: "GET" });
 }
 
+function isPrivateHost(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  if (!host || host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) {
+    return true;
+  }
+  if (host.includes(":")) {
+    return host === "::" || host === "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe8") || host.startsWith("fe9") || host.startsWith("fea") || host.startsWith("feb");
+  }
+  const parts = host.split(".");
+  if (parts.length === 4 && parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255)) {
+    const a = Number(parts[0]);
+    const b = Number(parts[1]);
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 169 && b === 254) ||
+      (a === 192 && b === 168) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 198 && (b === 18 || b === 19))
+    );
+  }
+  return false;
+}
+
 export function upstreamFetch(
   fetchImpl: typeof fetch,
   url: string,
   init: RequestInit = {},
   timeoutMs?: number,
 ): Promise<Response> {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return Promise.reject(new Error("invalid upstream url"));
+  }
+  if ((parsed.protocol !== "https:" && parsed.protocol !== "http:") || isPrivateHost(parsed.hostname)) {
+    return Promise.reject(new Error("blocked upstream target"));
+  }
   return fetchImpl(url, { ...init, signal: AbortSignal.timeout(timeoutMs ?? UPSTREAM_TIMEOUT_MS) });
 }
 

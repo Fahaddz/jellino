@@ -4,7 +4,7 @@ import { registerFirstUser } from "../src/auth";
 import { issueToken } from "../src/session";
 import { encodeEpisode, encodeItem, encodePerson, encodeSeason, encodeView } from "../src/ids";
 import { artImageTag, artUrlAllowed } from "../src/library-art";
-import { photoFromImageTag } from "../src/people";
+import { photoFromImageTag, photoImageTag } from "../src/people";
 import { callApp, createFakeDb, testEnv } from "./fake-db";
 
 type Db = import("@cloudflare/workers-types").D1Database;
@@ -164,6 +164,57 @@ describe("artwork and metadata completeness", () => {
     const unknown = await callApp(app, env, `/Items/${encodePerson("Nobody Here")}/Images/Primary`, { headers: authHeader(token) });
     expect(unknown.status).toBe(200);
     expect(unknown.headers.get("content-type")).toContain("image/svg+xml");
+  });
+
+  it("does not let a person image tag poison the shared cache", async () => {
+    installNet();
+    const { raw, db, adminId } = await household();
+    const token = await issueToken(db, adminId, Math.floor(Date.now() / 1000));
+    const app = createApp();
+    const env = testEnv(raw);
+    const attacker = "https://evil.example/fake.png";
+    const tag = photoImageTag(attacker);
+    const person = encodePerson("Nobody Here");
+
+    const poison = await callApp(app, env, `/Items/${person}/Images/Primary?tag=${encodeURIComponent(tag)}`, {
+      headers: authHeader(token),
+    });
+    expect(poison.status).toBe(302);
+    expect(poison.headers.get("location")).toBe(attacker);
+
+    const afterItem = await callApp(app, env, `/Items/${person}/Images/Primary`, { headers: authHeader(token) });
+    expect(afterItem.status).toBe(200);
+    expect(afterItem.headers.get("content-type")).toContain("image/svg+xml");
+    expect(afterItem.headers.get("location")).toBeNull();
+
+    const personPoison = await callApp(app, env, `/Persons/${person}/Images/Primary?tag=${encodeURIComponent(tag)}`);
+    expect(personPoison.status).toBe(302);
+    expect(personPoison.headers.get("location")).toBe(attacker);
+
+    const afterPerson = await callApp(app, env, `/Persons/${person}/Images/Primary`);
+    expect(afterPerson.status).toBe(200);
+    expect(afterPerson.headers.get("content-type")).toContain("image/svg+xml");
+    expect(afterPerson.headers.get("location")).toBeNull();
+  });
+
+  it("encodes item id segments before the artwork fetch", async () => {
+    const calls: string[] = [];
+    installNet();
+    const realFetch = (globalThis as unknown as Record<string, unknown>).fetch as typeof fetch;
+    (globalThis as unknown as Record<string, unknown>).fetch = async (input: unknown, init?: RequestInit) => {
+      calls.push(String(input instanceof Request ? input.url : input));
+      return realFetch(input as RequestInfo, init);
+    };
+    const { raw, db, adminId } = await household();
+    const token = await issueToken(db, adminId, Math.floor(Date.now() / 1000));
+    const app = createApp();
+    const env = testEnv(raw);
+    const movie = encodeItem(CINE, "movie", "../admin");
+    await callApp(app, env, `/Items/${movie}/Images/Primary`, { headers: authHeader(token) });
+    const metaCalls = calls.filter((url) => url.startsWith(`${CINE}/meta/`));
+    expect(metaCalls.length).toBeGreaterThan(0);
+    expect(metaCalls.some((url) => url.includes("..%2Fadmin"))).toBe(true);
+    expect(metaCalls.some((url) => url.includes("/../"))).toBe(false);
   });
 
   it("resolves item artwork straight from the image tag without calling the addon", async () => {
