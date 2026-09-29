@@ -81,9 +81,9 @@ This document serves as the single source of truth for AI agents and developers 
 
 ### A. Subtitle Delivery (AIOMetadata Method)
 
-> **Credit & Source of Truth.** This pipeline is a direct port of **AIOMetadata**'s Jellyfin integration — [github.com/cedya77/aiometadata](https://github.com/cedya77/aiometadata) on branch **`feat/jellyfin-server`**, pinned at commit `44bacb1bd4a9e80ac27749419822b0e441f560d4` (synced 2026-09-23). The upstream files are `addon/lib/jellyfin/subtitles.ts` and `attachExternalSubtitles` / `subtitleHandler` in `addon/lib/jellyfin/index.ts`.
+> **Credit & Source of Truth.** This pipeline is a direct port of **AIOMetadata**'s Jellyfin integration — [github.com/cedya77/aiometadata](https://github.com/cedya77/aiometadata) on branch **`dev`**, pinned at commit `f5846af709c853abe2c77e09c1b8fa757c70006d` (synced 2026-09-29). The upstream files are `addon/lib/jellyfin/subtitles.ts` and `attachExternalSubtitles` / `subtitleHandler` in `addon/lib/jellyfin/index.ts`.
 >
-> **Before changing anything subtitle-related:** check `tmp/aiometadata` on `feat/jellyfin-server` against pinned commit `44bacb1b`. Jellino's subtitle implementation must stay **1:1 with AIOMetadata** — same cue parsing, same `pickSubtitles`, same advertised field set, same format negotiation, same conversion, same 502-on-failure.
+> **Before changing anything subtitle-related:** check `tmp/aiometadata` on `dev` against pinned commit `f5846af7`. Jellino's subtitle implementation must stay **1:1 with AIOMetadata** — same cue parsing, same `pickSubtitles`, same advertised field set, same format negotiation, same conversion, same 502-on-failure.
 >
 > **Intentional Deviations:** (1) `SUBTITLES_PER_LANGUAGE = 8` (upstream default is 3), (2) multi-addon fanout querying all enabled subtitle addons, (3) legacy character encoding auto-detection (`decodeSubtitleBytes`, e.g. Windows-1256 Arabic) where upstream assumes UTF-8, (4) transparent gzip decompression (`decompressIfNeeded` for `.srt.gz`), (5) Cloudflare Cache API with `rebuildOffer` fallback, (6) unified D1 `app_log` observability (category `subtitle`).
 
@@ -114,7 +114,7 @@ The pipeline is **list → pick → advertise → click → fetch/convert → se
 
 ### B. Metadata Delivery (AIOMetadata Method)
 
-> **Credit & Source of Truth.** Metadata transformation into Jellyfin `BaseItemDto` follows **AIOMetadata**'s Jellyfin integration — [github.com/cedya77/aiometadata](https://github.com/cedya77/aiometadata) on branch **`feat/jellyfin-server`**, pinned at commit `44bacb1bd4a9e80ac27749419822b0e441f560d4` (synced 2026-09-23). The upstream files are `addon/lib/jellyfin/items.ts`, `dto.ts`, and `people.ts`.
+> **Credit & Source of Truth.** Metadata transformation into Jellyfin `BaseItemDto` follows **AIOMetadata**'s Jellyfin integration — [github.com/cedya77/aiometadata](https://github.com/cedya77/aiometadata) on branch **`dev`**, pinned at commit `f5846af709c853abe2c77e09c1b8fa757c70006d` (synced 2026-09-29). The upstream files are `addon/lib/jellyfin/items.ts`, `dto.ts`, and `people.ts`.
 
 - **DTO Mapping:** Follows AIOMetadata's `metaToBaseItem`, `buildEpisodes`, and `buildSeasons` 1:1, but extracts richer metadata (`Studios`, `ProductionCompanies`, `Taglines`, `Status`, `CriticRating`, `RecursiveItemCount`, dynamic aspect ratios) from `meta.app_extras`.
 - **Episode Paging Optimization (commit `f3835d19`):** `/Shows/:id/Episodes` slices the raw video array by `StartIndex` and `Limit` *before* constructing DTOs when no watch filters are active. This prevents CPU and memory spikes on long-running anime or shows with 1000+ episodes.
@@ -124,7 +124,7 @@ The pipeline is **list → pick → advertise → click → fetch/convert → se
 
 ### C. Stream Fetching & Playback
 
-> **Credit & Source of Truth.** Stream transformation into Jellyfin `MediaSourceInfo` and `MediaStream` follows **AIOMetadata**'s Jellyfin integration — [github.com/cedya77/aiometadata](https://github.com/cedya77/aiometadata) on branch **`feat/jellyfin-server`**, pinned at commit `44bacb1bd4a9e80ac27749419822b0e441f560d4` (synced 2026-09-23). The upstream files are `addon/lib/jellyfin/streams.ts` and `addon/lib/jellyfin/index.ts`.
+> **Credit & Source of Truth.** Stream transformation into Jellyfin `MediaSourceInfo` and `MediaStream` follows **AIOMetadata**'s Jellyfin integration — [github.com/cedya77/aiometadata](https://github.com/cedya77/aiometadata) on branch **`dev`**, pinned at commit `f5846af709c853abe2c77e09c1b8fa757c70006d` (synced 2026-09-29). The upstream files are `addon/lib/jellyfin/streams.ts` and `addon/lib/jellyfin/index.ts`.
 
 - **Small-Caps & Unicode Normalization (`foldLabel`):** Debrid scraper stream titles containing Unicode small capitals (`ᴀ`–`ᴢ`) and zero-width characters (e.g. `ᴜʜᴅ`, `ʜᴇᴠᴄ`, `ʜᴅʀ`, `ᴅᴠ`, `ᴀᴛᴍᴏs`) are unfolded to ASCII before tag and codec matching, ensuring accurate HDR and resolution badges.
 - **Video Route Aliases:** Direct video streams are served at `/Videos/:id/stream`, `/Videos/:id/stream.:ext`, `/Videos/:id/stream/:filename`, `/Videos/:id/original`, `/Videos/:id/original.:ext`, and `/Videos/:id/original/:filename`.
@@ -140,7 +140,7 @@ The pipeline is **list → pick → advertise → click → fetch/convert → se
 
 ### D. Media Segments (Intro/Outro/Recap Skips)
 
-> **Credit & Source of Truth.** Media segment detection and resolution follows **AIOMetadata**'s Jellyfin skip pipeline — [github.com/cedya77/aiometadata](https://github.com/cedya77/aiometadata) on branch **`feat/jellyfin-server`**, pinned at commit `44bacb1bd4a9e80ac27749419822b0e441f560d4` (synced 2026-09-23). The upstream files are `addon/lib/jellyfin/segments.ts` and `addon/utils/publicmetadbUtils.ts`.
+> **Credit & Source of Truth.** Media segment detection and resolution follows **AIOMetadata**'s Jellyfin skip pipeline — [github.com/cedya77/aiometadata](https://github.com/cedya77/aiometadata) on branch **`dev`**, pinned at commit `f5846af709c853abe2c77e09c1b8fa757c70006d` (synced 2026-09-29). The upstream files are `addon/lib/jellyfin/segments.ts` and `addon/utils/publicmetadbUtils.ts`.
 
 - **Provider Precedence:** Queries up to three skip providers in priority order: `PublicMetaDB` (requires optional API key, favors streaming releases) → `AniSkip` (for anime OP/ED/recap skips) → `IntroDB` (free community intro/outro/recap database). First provider to find a given segment type wins.
 - **Anime MAL ID Isolation:** Only queries AniSkip when a true MyAnimeList numeric ID is verified (`mal:...` or `meta.mal_id`), preventing Kitsu IDs from erroneously querying unrelated MAL anime.

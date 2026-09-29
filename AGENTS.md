@@ -56,8 +56,8 @@ Key owners: AIOMetadata (subtitles, metadata, segments, streams DTOs), Remux (Je
 
 ### Upstream Reference: AIOMetadata Metadata Pipeline
 - **Upstream Repository:** `https://github.com/cedya77/aiometadata`
-- **Branch:** `feat/jellyfin-server`
-- **Pinned Commit:** `44bacb1bd4a9e80ac27749419822b0e441f560d4` (synced 2026-09-23)
+- **Branch:** `dev`
+- **Pinned Commit:** `f5846af709c853abe2c77e09c1b8fa757c70006d` (synced 2026-09-29)
 - **Source Files in AIOMetadata:**
   - `addon/lib/jellyfin/items.ts` (`metaToBaseItem`, `buildEpisodes`, `pageEpisodes`, `buildSeasons`, `providerIds`, `sortNameFor`, `includeTypesFilter`)
   - `addon/lib/jellyfin/dto.ts` (`publicSystemInfo`, `systemInfo`, `userDto`, `collectionFolder`)
@@ -71,17 +71,19 @@ Key owners: AIOMetadata (subtitles, metadata, segments, streams DTOs), Remux (Je
   2. **Episode SortName Chronological Padding:** Episode `SortName` is prefixed with 4-digit zero-padded episode index (`0001 - ...`) to ensure correct chronological sorting in Jellyfin clients.
   3. **Per-Entry Anime Provider ID Isolation:** Prevents attaching parent series IMDb/TMDB IDs to per-entry anime (`kitsu`, `mal`, `anilist`, `anidb`) so Jellyfin clients do not fold separate seasons together.
   4. **Richer DTOs:** Jellino populates `Studios`, `ProductionCompanies`, `Taglines`, `Status`, `CriticRating`, `RecursiveItemCount`, and dynamic `PrimaryImageAspectRatio` from `app_extras` which upstream hardcodes empty.
+  5. **Watched Filters (upstream `2d6c53e`):** `Filters=IsPlayed`/`IsUnplayed` and the standalone `IsPlayed=true/false` query flags both filter library and home listings (`requestedFilters` in `src/index.ts`).
 - **How to Sync Future Upstream Updates:**
-  1. Run `git -C tmp/aiometadata fetch origin && git -C tmp/aiometadata diff 44bacb1bd4a9e80ac27749419822b0e441f560d4..origin/feat/jellyfin-server -- addon/lib/jellyfin/items.ts addon/lib/jellyfin/dto.ts addon/lib/jellyfin/people.ts`
+  1. Run `git -C tmp/aiometadata fetch origin && git -C tmp/aiometadata diff f5846af709c853abe2c77e09c1b8fa757c70006d..origin/dev -- addon/lib/jellyfin/items.ts addon/lib/jellyfin/dto.ts addon/lib/jellyfin/people.ts`
   2. Port any new field mappings or performance adjustments into `src/meta.ts`, `src/people.ts`, or `src/index.ts`.
   3. Run `bun run typecheck && bun test tests/meta.test.ts`.
 
 ### Upstream Reference: Nuvio Account Model & Tracking Sync
 - **Upstream Repositories:**
-  - `https://github.com/NuvioMedia/NuvioTV` (`dev` branch, commit `8a38b0dec4`)
-  - `https://github.com/NuvioMedia/NuvioMobile` (`cmp-rewrite` branch, commit `b88fef2e`)
-  - `https://github.com/NuvioMedia/NuvioDesktop` (`Dev` branch, commit `fca66320`)
+  - `https://github.com/NuvioMedia/NuvioTV` (`dev` branch, commit `c257a2365e`)
+  - `https://github.com/NuvioMedia/NuvioMobile` (`cmp-rewrite` branch, commit `fc4608d292`)
+  - `https://github.com/NuvioMedia/NuvioDesktop` (`Dev` branch, commit `b1e00724c5`)
   - `https://github.com/NuvioMedia/self-host` (commit `39ea2bd1bc`)
+- **Note:** The previous NuvioTV pin (`8a38b0dec4`) no longer exists upstream; the branch was rewritten.
 - **Source Files in Upstream:**
   - `NuvioMobile`: `SupabaseProgressSyncAdapter.kt`, `SupabaseWatchedSyncAdapter.kt`, `SupabaseLibrarySyncAdapter.kt`
   - `NuvioTV`: `WatchProgress.kt` (`COMPLETED_THRESHOLD = 0.90f`, `STARTED_THRESHOLD = 0.02f`)
@@ -119,7 +121,7 @@ Key owners: AIOMetadata (subtitles, metadata, segments, streams DTOs), Remux (Je
 ### Upstream Reference: Remux Protocol Surface & Session Management
 - **Upstream Repository:** `https://github.com/lostb1t/remux`
 - **Branch:** `main`
-- **Pinned Commit:** `da012b7c9285117f13493a0cfb8c0b2bc344993e` (synced 2026-09-23)
+- **Pinned Commit:** `816aacb935af72e4f5d920a245030e3dbac3f794` (synced 2026-09-29)
 - **Source Files in Remux:**
   - `crates/remux-server/src/api/session.rs` (`report_playback_stopped`, `report_playback_progress`, `sessions_capabilities_full`, `get_sessions`, `remote_play`, `remote_playstate_command`)
   - `crates/remux-server/src/api/items.rs`
@@ -131,15 +133,16 @@ Key owners: AIOMetadata (subtitles, metadata, segments, streams DTOs), Remux (Je
 - **Parity & Key Enhancements:**
   1. **Positionless Stop Preservation (upstream `da012b7`):** When a client issues `/Sessions/Playing/Stopped` without providing `PositionTicks`, Jellino checks in-memory debounced progress and persisted D1 watch position before defaulting to 0, ensuring playback position is never accidentally erased.
   2. **Direct-Play Optimization:** Unlike Remux which runs local ffmpeg transcoding, Jellino operates as a pure direct-play bridge for Cloudflare Workers isolates without spawning subprocesses or probing over HTTP range.
+  3. **Tolerant Boolean Query Values (upstream `f50c400`):** `boolQuery` in `src/query.ts` accepts boolean query parameters case-insensitively and as `1`/`0`, matching upstream's generated query deserializers.
 - **How to Sync Future Upstream Updates:**
-  1. Run `git -C tmp/remux fetch origin && git -C tmp/remux diff da012b7c9285117f13493a0cfb8c0b2bc344993e..origin/main -- crates/remux-server/src/api/session.rs crates/remux-dashboard/`
-  2. Check for session protocol or client capability changes.
+  1. Run `git -C tmp/remux fetch origin && git -C tmp/remux diff 816aacb935af72e4f5d920a245030e3dbac3f794..origin/main -- crates/remux-server/src/api/session.rs crates/remux-server/src/api/items.rs crates/remux-dashboard/`
+  2. Check for session protocol or client capability changes. Boolean query values must stay case-insensitive and accept `1`/`0` (`src/query.ts` `boolQuery`).
   3. Run `bun run typecheck && bun test tests/sessions.test.ts`.
 
 ### Upstream Reference: AIOMetadata Stream & MediaSource Pipeline
 - **Upstream Repository:** `https://github.com/cedya77/aiometadata`
-- **Branch:** `feat/jellyfin-server`
-- **Pinned Commit:** `44bacb1bd4a9e80ac27749419822b0e441f560d4` (synced 2026-09-23)
+- **Branch:** `dev`
+- **Pinned Commit:** `f5846af709c853abe2c77e09c1b8fa757c70006d` (synced 2026-09-29)
 - **Source Files in AIOMetadata:**
   - `addon/lib/jellyfin/streams.ts` (`mediaSourceFor`, `buildMediaStreams`, `mediaSourceIdFor`, `foldLabel`, `videoRange`, `placeholderMediaSource`)
   - `addon/lib/jellyfin/index.ts` (video streaming route aliases and `/Items/:itemId/MediaSources`)
@@ -151,15 +154,18 @@ Key owners: AIOMetadata (subtitles, metadata, segments, streams DTOs), Remux (Je
   2. **Extended Video Streaming Route Aliases:** Handles `/Videos/:id/stream`, `/Videos/:id/stream.:ext`, `/Videos/:id/stream/:filename`, `/Videos/:id/original`, `/Videos/:id/original.:ext`, and `/Videos/:id/original/:filename`.
   3. **Dedicated MediaSources Endpoints:** Implements `GET /Items/:id/MediaSources` and `GET /Users/:userId/Items/:id/MediaSources` for Infuse and Kodi clients.
   4. **Cloudflare Worker Safe Defaults:** Disables remote stream range probing (`SupportsProbing: false`) to preserve subrequest and CPU budgets, and preserves pure transparent bridge behavior without dropping or capping streams.
+  5. **Full Placeholder Stream Flags (upstream `4e13dd5`):** `placeholderMediaSource` emits `ReadAtNativeFramerate`, `IgnoreDts`, `IgnoreIndex`, `GenPtsInput`, and `HasSegments` alongside the rest of the stream flags.
+  6. **Suggestions Stubs (upstream `b8b4654`):** `/Items/Suggestions` and `/Users/:userId/Suggestions` answer an empty list ahead of the `/Items/:id` route instead of being read as an item id.
+  7. **Not Ported — Text-Only Stream Notices (`toNotice`):** Upstream lists non-playable addon entries as extra placeholder sources behind a dashboard setting; Jellino keeps the source list to playable streams.
 - **How to Sync Future Upstream Updates:**
-  1. Run `git -C tmp/aiometadata fetch origin && git -C tmp/aiometadata diff 44bacb1bd4a9e80ac27749419822b0e441f560d4..origin/feat/jellyfin-server -- addon/lib/jellyfin/streams.ts addon/lib/jellyfin/index.ts`
+  1. Run `git -C tmp/aiometadata fetch origin && git -C tmp/aiometadata diff f5846af709c853abe2c77e09c1b8fa757c70006d..origin/dev -- addon/lib/jellyfin/streams.ts addon/lib/jellyfin/index.ts`
   2. Check for newly supported audio/video codec mappings or route parameters and update `src/streams.ts` and `src/playback.ts`.
   3. Run `bun run typecheck && bun test tests/playback.test.ts`.
 
 ### Upstream Reference: AIOMetadata & Skip Providers Media Segments Pipeline
 - **Upstream Repository:** `https://github.com/cedya77/aiometadata`
-- **Branch:** `feat/jellyfin-server`
-- **Pinned Commit:** `44bacb1bd4a9e80ac27749419822b0e441f560d4` (synced 2026-09-23)
+- **Branch:** `dev`
+- **Pinned Commit:** `f5846af709c853abe2c77e09c1b8fa757c70006d` (synced 2026-09-29)
 - **Source Files in AIOMetadata:**
   - `addon/lib/jellyfin/segments.ts` (`fromPublicMetaDb`, `fromIntroDb`, `fromAniSkip`, `segmentsFor`, `segmentId`)
   - `addon/utils/publicmetadbUtils.ts` (`fetchSkips`)
@@ -172,15 +178,16 @@ Key owners: AIOMetadata (subtitles, metadata, segments, streams DTOs), Remux (Je
   2. **Anime MAL ID Isolation:** Only queries AniSkip with verified MyAnimeList IDs (`mal:...` or `meta.mal_id`), preventing Kitsu IDs from erroneously querying unrelated MAL anime.
   3. **Runtime Propagation:** Supplies target `runtimeMs` from meta to enable length-matched AniSkip results.
   4. **Tiered Edge Caching:** 7-day TTL on positive segment matches; 5-minute negative cache on misses to minimize upstream API calls and subrequests.
+  5. **Not Ported — `fetchResume` Pagination:** Upstream pages `PublicMetaDB /api/external/resume`; Jellino's resume points come from Nuvio and only `fetchSkips` is ported.
 - **How to Sync Future Upstream Updates:**
-  1. Run `git -C tmp/aiometadata fetch origin && git -C tmp/aiometadata diff 44bacb1bd4a9e80ac27749419822b0e441f560d4..origin/feat/jellyfin-server -- addon/lib/jellyfin/segments.ts addon/utils/publicmetadbUtils.ts`
+  1. Run `git -C tmp/aiometadata fetch origin && git -C tmp/aiometadata diff f5846af709c853abe2c77e09c1b8fa757c70006d..origin/dev -- addon/lib/jellyfin/segments.ts addon/utils/publicmetadbUtils.ts`
   2. Check for new segment types or upstream API schema updates.
   3. Run `bun run typecheck && bun test tests/segments.test.ts`.
 
 ### Upstream Reference: AIOMetadata Subtitle Pipeline
 - **Upstream Repository:** `https://github.com/cedya77/aiometadata`
-- **Branch:** `feat/jellyfin-server`
-- **Pinned Commit:** `44bacb1bd4a9e80ac27749419822b0e441f560d4` (synced 2026-09-23)
+- **Branch:** `dev`
+- **Pinned Commit:** `f5846af709c853abe2c77e09c1b8fa757c70006d` (synced 2026-09-29)
 - **Source Files in AIOMetadata:**
   - `addon/lib/jellyfin/subtitles.ts` (formats, parsers, cue converters, language normalization, `pickSubtitles`, `subtitleFormatFor`, `subtitleCodecFor`)
   - `addon/lib/jellyfin/index.ts` (lines ~1015–1250: `attachExternalSubtitles` and `subtitleHandler` route handlers)
@@ -188,7 +195,7 @@ Key owners: AIOMetadata (subtitles, metadata, segments, streams DTOs), Remux (Je
   - `src/subtitles.ts` (all subtitle parsers, cue encoders, charset decoders, gzip decompressor, language tables, addon fetchers)
   - `src/playback.ts` (`videosSubtitle` endpoint, `profileMediaSources`, `rebuildOffer`)
   - `src/streams.ts` (`subtitleStream` DTO generator)
-- **Parity Status:** 1:1 with latest HEAD on `feat/jellyfin-server`. (Zero code updates upstream to Jellyfin subtitles since initial commit `0c5cba04`).
+- **Parity Status:** 1:1 with latest HEAD on `dev`. Since the initial port (`0c5cba04`) upstream changed only cache-lifetime reads in `subtitles.ts`; parsers, formats, and handlers are untouched.
 - **Deliberate Deviations from Upstream:**
   1. `SUBTITLES_PER_LANGUAGE = 8`: Upstream defaults to 3 (`envInt('JELLYFIN_SUBTITLES_PER_LANGUAGE', 3, 1)`). Jellino sets this to 8 so users have more subtitle options per language. Total cap remains 40 (`SUBTITLES_MAX = 40`).
   2. **Multi-Addon Fanout:** Upstream queries only one stream addon base (`fetchAddonSubtitles`); Jellino queries all enabled subtitle-capable addons for the user's Nuvio profile (`fetchAllAddonSubtitles`).
@@ -197,7 +204,7 @@ Key owners: AIOMetadata (subtitles, metadata, segments, streams DTOs), Remux (Je
   5. **Cloudflare Cache & Dynamic Rebuild:** Upstream uses in-process Node `LRUCache`. Jellino uses Cloudflare Cache API (`caches.default`) with fallback reconstruction via `rebuildOffer` if the edge cache expires.
   6. **Observability Logging:** Jellino logs every subtitle request, latency, payload size, and outcome to D1 `app_log` (category `subtitle`) via `logSubtitleServe`.
 - **How to Sync Future Upstream Updates:**
-  1. Run `git -C tmp/aiometadata fetch origin && git -C tmp/aiometadata diff 44bacb1bd4a9e80ac27749419822b0e441f560d4..origin/feat/jellyfin-server -- addon/lib/jellyfin/subtitles.ts addon/lib/jellyfin/index.ts`
+  1. Run `git -C tmp/aiometadata fetch origin && git -C tmp/aiometadata diff f5846af709c853abe2c77e09c1b8fa757c70006d..origin/dev -- addon/lib/jellyfin/subtitles.ts addon/lib/jellyfin/index.ts`
   2. If upstream changed subtitle parsing, formatting, or routing, port the logic to `src/subtitles.ts` or `src/playback.ts` while preserving the 6 deliberate deviations above.
   3. Run `bun run typecheck && bun test tests/subtitles.test.ts`.
   4. Update the pinned commit and last-synced date here and in `docs/reference-projects.md`.

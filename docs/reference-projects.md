@@ -2,13 +2,19 @@
 
 Jellino is a bridge, not an original implementation. Each feature follows a pinned upstream project as closely as possible (1:1 where the protocol allows). This file is the contract: which project owns which feature, which commit we last synced against, and how to pull upstream changes.
 
-Local checkouts live in `tmp/` (gitignored). Keep them shallow clones of the URLs below.
+Local checkouts live in `tmp/` (gitignored). Keep them as blobless clones of the URLs below:
+
+```bash
+git clone --filter=blob:none --no-checkout https://github.com/<owner>/<repo> tmp/<repo>
+```
+
+AIOMetadata's Jellyfin work lives on `dev`; `feat/jellyfin-server` is frozen at the previous pin and no longer receives commits, so diffs must use `origin/dev`.
 
 ## Feature map
 
 | Feature | Reference project | What we take | Jellino files |
 | --- | --- | --- | --- |
-| Subtitle pipeline (list → pick → advertise → click → fetch/convert → serve) | [cedya77/aiometadata](https://github.com/cedya77/aiometadata) (`feat/jellyfin-server`) | `addon/lib/jellyfin/subtitles.ts` + the subtitle handlers in `addon/lib/jellyfin/index.ts` | `src/subtitles.ts`, subtitle routes in `src/playback.ts` |
+| Subtitle pipeline (list → pick → advertise → click → fetch/convert → serve) | [cedya77/aiometadata](https://github.com/cedya77/aiometadata) (`dev`) | `addon/lib/jellyfin/subtitles.ts` + the subtitle handlers in `addon/lib/jellyfin/index.ts` | `src/subtitles.ts`, subtitle routes in `src/playback.ts` |
 | Metadata → Jellyfin DTOs (movie/series/season/episode/person, artwork tags, provider ids, user data) | [cedya77/aiometadata](https://github.com/cedya77/aiometadata) | `addon/lib/jellyfin/{dto,items,people,artwork,watched}.ts` | `src/meta.ts`, `src/index.ts`, `src/people.ts` |
 | Media segments (intro/outro/recap) | [cedya77/aiometadata](https://github.com/cedya77/aiometadata) + [PublicMetaDB](https://publicmetadb.com) | `addon/lib/jellyfin/segments.ts`, `addon/utils/publicmetadbUtils.ts`; provider order PublicMetaDB → AniSkip → IntroDB | `src/segments.ts` |
 | Streams → Jellyfin MediaSources/MediaStreams | [cedya77/aiometadata](https://github.com/cedya77/aiometadata) (AIOStreams `parsedFile` field mapping) | `addon/lib/jellyfin/streams.ts` | `src/streams.ts`, `src/playback.ts` |
@@ -25,13 +31,15 @@ Update this table whenever a reference is re-synced.
 
 | Reference | URL | Pinned commit | Last synced |
 | --- | --- | --- | --- |
-| AIOMetadata | https://github.com/cedya77/aiometadata | `44bacb1bd4` | 2026-09-23 |
-| Remux | https://github.com/lostb1t/remux | `da012b7c92` | 2026-09-23 |
-| NuvioTV | https://github.com/NuvioMedia/NuvioTV | `8a38b0dec4` | 2026-09-23 |
-| NuvioMobile | https://github.com/NuvioMedia/NuvioMobile | `b88fef2e` | 2026-09-23 |
-| NuvioDesktop | https://github.com/NuvioMedia/NuvioDesktop | `fca66320` | 2026-09-23 |
-| Nuvio self-host | https://github.com/NuvioMedia/self-host | `39ea2bd1bc` | 2026-09-23 |
-| Nuvio Account Manager | https://github.com/techuhak/Nuvio-Account-Manager | `c122c44f86` | 2026-09-23 |
+| AIOMetadata | https://github.com/cedya77/aiometadata | `f5846af709` (`dev`) | 2026-09-29 |
+| Remux | https://github.com/lostb1t/remux | `816aacb935` | 2026-09-29 |
+| NuvioTV | https://github.com/NuvioMedia/NuvioTV | `c257a2365e` | 2026-09-29 |
+| NuvioMobile | https://github.com/NuvioMedia/NuvioMobile | `fc4608d292` | 2026-09-29 |
+| NuvioDesktop | https://github.com/NuvioMedia/NuvioDesktop | `b1e00724c5` | 2026-09-29 |
+| Nuvio self-host | https://github.com/NuvioMedia/self-host | `39ea2bd1bc` | 2026-09-29 |
+| Nuvio Account Manager | https://github.com/techuhak/Nuvio-Account-Manager | `c122c44f86` | 2026-09-29 |
+
+The previous NuvioTV pin (`8a38b0dec4`) no longer exists upstream (history rewritten); `c257a2365e` is the re-verified base.
 
 ## Updating a reference
 
@@ -44,6 +52,19 @@ Update this table whenever a reference is re-synced.
 
 ## Rules
 
-- A reference owns a feature; do not invent behavior when the reference already defines it. If a reference field has no source in the Stremio/Nuvio data model, document it in the README "Known gaps" table instead of approximating.
+- A reference owns a feature; do not invent behavior when the reference already defines it. If a reference field has no source in the Stremio/Nuvio data model, document it in the README "Known gaps" section instead of approximating.
 - When a reference adds a field a Jellyfin DTO can carry, add it here and port it.
 - Subtitle and metadata work should stay diff-able against AIOMetadata: keep the same function boundaries where practical.
+
+## Deliberately not ported
+
+These upstream areas have no Jellino counterpart. Checking them on a sync is wasted effort; only revisit if Jellino grows the matching feature.
+
+- AIOMetadata tracker/account layer (`trackerMirror`, `trackerSource`, `playstateSync`, `watched`, `resume`, `watchlist`, `canonicalIds`, `resolutions`, `tokens`, `profiles`): Jellino mirrors Nuvio RPCs, not third-party trackers or a local account database.
+- AIOMetadata dynamic cache TTL env vars and dashboard toggles (stream/subtitle TTL, Latest rows, anime-only, external-subtitle cap): Jellino's lifetimes are Cloudflare Cache API rules, and it adds no setting that caps upstream output.
+- AIOMetadata catalog `fetchWindow` cursor/page-length bookkeeping: Jellino owns its paging contract (`MAX_WINDOW_PAGES`, `MAX_CATALOG_PAGES`) and walks until the addon runs out.
+- AIOMetadata calendar queries (`MinPremiereDate`/`MaxPremiereDate` episodes): Upcoming is a Nuvio-owned snapshot.
+- AIOMetadata text-only stream notices (`toNotice`) and `PublicMetaDB fetchResume` pagination: Jellino lists only playable streams and takes resume points from Nuvio (`fetchSkips` is the only PublicMetaDB call it makes).
+- Remux transcoding/device-capability features (4K capability learning, device profiles, capability-based media-source sorting, subtitle dedup/burn-in selection, remote availability probing): Jellino is direct-play only and keeps the addon's source order.
+- Remux admin/collections/People editing and RemuxDB/yt-dlp/VAAPI internals: Jellino has no local media database.
+- Nuvio client-local behavior (catalog key formats, profile-settings blob v4 including `custom_poster_enabled_screens`, plugin settings sync, the short-clip tracking guard): Jellino reads RPC fields rather than client key strings, and the short-clip guard is a client-side placeholder rule.

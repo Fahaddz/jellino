@@ -75,7 +75,7 @@ Jellino adopts proven patterns from established open-source projects rather than
 
 | Feature | Adopted From | Implementation & Jellino Choice |
 | :--- | :--- | :--- |
-| **Subtitle Pipeline** | [AIOMetadata](https://github.com/cedya77/aiometadata) (`feat/jellyfin-server`) | Direct 1:1 port (list &rarr; pick &rarr; advertise &rarr; click &rarr; serve). Serves 8 tracks per language (max 40) and decodes legacy encodings (e.g. Windows-1256 Arabic). Zero proxying or transcoding. |
+| **Subtitle Pipeline** | [AIOMetadata](https://github.com/cedya77/aiometadata) (`dev`) | Direct 1:1 port (list &rarr; pick &rarr; advertise &rarr; click &rarr; serve). Serves 8 tracks per language (max 40) and decodes legacy encodings (e.g. Windows-1256 Arabic). Zero proxying or transcoding. |
 | **Metadata & DTOs** | [AIOMetadata](https://github.com/cedya77/aiometadata) | Full Jellyfin metadata mapping for movies, series, seasons, episodes, people, ratings, and studios. Multi-addon fallback merges missing overview, cast, or season art. |
 | **Media Segments** | [AIOMetadata](https://github.com/cedya77/aiometadata) + PublicMetaDB | Skip intro, outro, and recap segments queried via PublicMetaDB &rarr; AniSkip &rarr; IntroDB. |
 | **Stream Extraction** | [AIOMetadata](https://github.com/cedya77/aiometadata) / AIOStreams | Maps parsed release tags, audio channels (Atmos, DTS), and stream qualities directly to Jellyfin MediaSources. Streams redirect directly to provider URLs. |
@@ -97,6 +97,12 @@ Jellino adopts proven patterns from established open-source projects rather than
 | Subtitle offer store | Rebuilds only on a cache miss | Rebuilds once on a stale index; item-detail requests never write offers | Keeps the playback menu and the clicked track consistent. |
 | Logout (`/Sessions/Logout`) | Revokes the calling access token | Local-only; revoke devices by setting a new client password (bumps the token epoch) | No server-side session store on the free tier. |
 | Artwork URLs | Served from local files | 302 redirect to provider CDNs, never host-restricted | Required for Stremio addon artwork; only the Worker's own fetch targets are validated. |
+
+### Known gaps
+
+- **Non-HTTP stream transports.** Stream addons that return only an `infoHash`, `ytId`, or archive link with no resolved HTTP `url` are not listed; Jellino plays direct URLs only. AIOMetadata's optional text-only "notice" rows are not ported.
+- **Calendar episode queries.** `MinPremiereDate`/`MaxPremiereDate` episode queries are not answered; Upcoming mirrors the Nuvio snapshot.
+- **Short placeholder clips.** Nuvio clients ignore sub-2-minute clips for tracking; Jellino records whatever a connected Jellyfin client reports.
 
 ---
 
