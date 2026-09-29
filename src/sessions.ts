@@ -18,6 +18,7 @@ import {
   recordTombstone,
 } from "./nuvio-home";
 import { hideItem, unhideItem } from "./hidden";
+import { boolQuery } from "./query";
 import { warmPlaybackFor } from "./streams";
 import {
   applyStopPosition,
@@ -171,7 +172,7 @@ async function sessionBody(c: Context<{ Bindings: Env }>): Promise<{
     const qTicks = Number(c.req.query("PositionTicks"));
     if (Number.isFinite(qTicks) && qTicks >= 0) positionTicks = Math.floor(qTicks);
   }
-  let isPaused = c.req.query("IsPaused") === "true" || c.req.query("isPaused") === "true";
+  let isPaused = boolQuery(c, "IsPaused") === true;
   let mediaSourceId: string | undefined = c.req.query("MediaSourceId") ?? undefined;
   let subtitleStreamIndex: number | undefined = c.req.query("SubtitleStreamIndex") !== undefined ? Number(c.req.query("SubtitleStreamIndex")) : undefined;
   try {
@@ -393,8 +394,7 @@ export function registerSessions(app: Hono<{ Bindings: Env }>) {
       const body = (await c.req.json()) as { Played?: unknown };
       if (typeof body.Played === "boolean") played = body.Played;
     } catch {
-      const query = c.req.query("Played");
-      if (query === "false") played = false;
+      if (boolQuery(c, "Played") === false) played = false;
     }
     return playState(c, played, c.req.param("userId"));
   });
@@ -543,8 +543,7 @@ export function registerSessions(app: Hono<{ Bindings: Env }>) {
 
   function ratingQuery(c: Context<{ Bindings: Env }>) {
     const itemId = c.req.param("itemId") ?? "";
-    const likes = c.req.query("Likes") ?? c.req.query("likes");
-    return ratingResponse(c, itemId, likes === "true" ? true : likes === "false" ? false : null);
+    return ratingResponse(c, itemId, boolQuery(c, "Likes"));
   }
 
   app.post("/Users/:userId/Items/:itemId/Rating", ratingQuery);

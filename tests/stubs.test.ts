@@ -57,6 +57,8 @@ describe("compat stubs", () => {
     expect((await callApp(app, env, "/Sessions/Playing/Ping", { method: "POST" })).status).toBe(204);
     expect(await (await callApp(app, env, "/Items/abc/Intros")).json()).toMatchObject({ Items: [] });
     expect(await (await callApp(app, env, "/Users/x/Items/abc/Intros")).json()).toMatchObject({ Items: [] });
+    expect(await (await callApp(app, env, "/Items/Suggestions")).json()).toMatchObject({ Items: [], TotalRecordCount: 0 });
+    expect(await (await callApp(app, env, "/Users/x/Suggestions")).json()).toMatchObject({ Items: [], TotalRecordCount: 0 });
     expect(await (await callApp(app, env, "/Items/abc/ThemeSongs")).json()).toMatchObject({ Items: [] });
     expect(await (await callApp(app, env, "/Items/abc/ThemeVideos")).json()).toMatchObject({ Items: [] });
     expect(await (await callApp(app, env, "/Items/abc/ThemeMedia")).json()).toMatchObject({

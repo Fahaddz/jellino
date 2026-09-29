@@ -13,7 +13,7 @@ import { REMUX_THEME_CSS } from "./ui/remux-css";
 import { authenticateByName, bearerToken, clearProfileDisabledCache, findProfile, issueToken, listProfiles, ownerForRequest, publicDto, rateAllow, readCredentials, userDto, verifiedOwner, verifyToken } from "./session";
 import { collectionTileInfo, collectionsFolderDto, profileCollections, profileLibraries, profileLibrarySplit, profileViewItem, catalogBases, viewDisplayName } from "./library";
 import { isHiddenItem } from "./hidden";
-import { csvSet, imageWidth, pageParams, queryIgnoreCase } from "./query";
+import { boolQuery, csvSet, imageWidth, pageParams, queryIgnoreCase } from "./query";
 import { artFromImageTag, artImageTag, artUrlAllowed, defaultLibraryTile } from "./library-art";
 import { COLLECTIONS_VIEW_ID, decodeItem, decodeLibrary, decodePerson, decodeView, encodeItem } from "./ids";
 import { episodeDto, movieDto, profileMeta, runtimeTicks, seasonDto, seasonEpisodes, seasonNumbers, seriesDto, sortNameFor, videoEpisodeNumber, type StremioVideo } from "./meta";
@@ -731,7 +731,7 @@ const itemDtoMemoryCache = new Map<string, { dto: Record<string, unknown>; expir
     let parentId = c.req.query("parentId") ?? c.req.query("ParentId");
     try {
       const filters = requestedFilters(c);
-      const isFavReq = filters.has("isfavorite") || c.req.query("IsFavorite") === "true" || c.req.query("isFavorite") === "true";
+      const isFavReq = filters.has("isfavorite") || boolQuery(c, "IsFavorite") === true;
 
       if (!searchTerm && !parentId && isFavReq) {
         const favRows = await c.env.DB
@@ -856,7 +856,7 @@ const itemDtoMemoryCache = new Map<string, { dto: Record<string, unknown>; expir
           return c.json({ Items: hits, TotalRecordCount: total, StartIndex: start });
         }
         const parent = decodeItem(parentId);
-        const deep = (c.req.query("Recursive") ?? c.req.query("recursive") ?? "").toLowerCase() === "true";
+        const deep = boolQuery(c, "Recursive") === true;
         const children = parent
           ? await profileChildItems(c.env.DB, caches.default, fetch, profileId, SERVER_ID, parentId, parent, deep)
           : null;
@@ -873,7 +873,11 @@ const itemDtoMemoryCache = new Map<string, { dto: Record<string, unknown>; expir
   }
 
   function requestedFilters(c: Context<{ Bindings: Env }>): Set<string> {
-    return csvSet(c.req.query("Filters") ?? c.req.query("filters") ?? "");
+    const filters = csvSet(c.req.query("Filters") ?? c.req.query("filters") ?? "");
+    const played = boolQuery(c, "IsPlayed");
+    if (played === true) filters.add("isplayed");
+    if (played === false) filters.add("isunplayed");
+    return filters;
   }
 
   function applyWatchFilters(

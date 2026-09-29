@@ -246,6 +246,16 @@ describe("stream helpers", () => {
     expect(sources[0]?.Id).toBe(id);
     expect(sources[1]?.Id).toBe(encodePlaceholderMarker(id));
     expect(sources.every((source) => source.Protocol === "Http")).toBe(true);
+    expect(
+      sources.every(
+        (source) =>
+          source.ReadAtNativeFramerate === false &&
+          source.IgnoreDts === false &&
+          source.IgnoreIndex === false &&
+          source.GenPtsInput === false &&
+          source.HasSegments === false,
+      ),
+    ).toBe(true);
   });
 
   it("emits etag plus hdr range facts on every source", () => {

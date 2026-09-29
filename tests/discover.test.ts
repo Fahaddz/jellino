@@ -151,13 +151,21 @@ describe("discover endpoints", () => {
     const app = createApp();
     const env = testEnv(raw);
 
-    const genres = await callApp(app, env, `/Genres?UserId=${adminId}`, { headers: authHeader(token) });
+    const genres = await callApp(app, env, `/Genres?UserId=${adminId}&Fields=ItemCounts`, { headers: authHeader(token) });
     expect(genres.status).toBe(200);
     const genresBody = (await genres.json()) as { Items: { Name: string; MovieCount: number; SeriesCount: number; ChildCount: number }[]; TotalRecordCount: number };
     const byName = new Map(genresBody.Items.map((item) => [item.Name, item]));
     expect(byName.get("Action")).toMatchObject({ MovieCount: 2, SeriesCount: 0, ChildCount: 2 });
     expect(byName.get("Drama")).toMatchObject({ MovieCount: 0, SeriesCount: 1, ChildCount: 1 });
     expect(genresBody.TotalRecordCount).toBe(3);
+
+    const unrequested = await callApp(app, env, `/Genres?UserId=${adminId}`, { headers: authHeader(token) });
+    const unrequestedBody = (await unrequested.json()) as { Items: Record<string, unknown>[] };
+    for (const item of unrequestedBody.Items) {
+      expect("ChildCount" in item).toBe(false);
+      expect("MovieCount" in item).toBe(false);
+      expect("SeriesCount" in item).toBe(false);
+    }
 
     const filters = await callApp(app, env, `/Items/Filters?UserId=${adminId}`, { headers: authHeader(token) });
     const filtersBody = (await filters.json()) as { Genres: string[]; Years: number[] };

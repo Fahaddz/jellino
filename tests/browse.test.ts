@@ -292,6 +292,16 @@ describe("browse routes", () => {
       await callApp(app, env, `/Users/${adminId}/Items?parentId=${viewId}`, { headers: auth(token) })
     ).json()) as { TotalRecordCount: number };
     expect(all.TotalRecordCount).toBe(1);
+
+    const playedFlag = (await (
+      await callApp(app, env, `/Users/${adminId}/Items?parentId=${viewId}&IsPlayed=true`, { headers: auth(token) })
+    ).json()) as { TotalRecordCount: number };
+    expect(playedFlag.TotalRecordCount).toBe(1);
+
+    const unplayedFlag = (await (
+      await callApp(app, env, `/Users/${adminId}/Items?parentId=${viewId}&IsPlayed=FALSE`, { headers: auth(token) })
+    ).json()) as { TotalRecordCount: number };
+    expect(unplayedFlag.TotalRecordCount).toBe(0);
   });
 });
 

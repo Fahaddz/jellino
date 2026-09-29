@@ -75,6 +75,10 @@ export function registerStubs(app: Hono<{ Bindings: Env }>, serverId: string): v
 
   app.get("/Users/:userId/Items/:id/Intros", (c) => c.json({ Items: [], TotalRecordCount: 0, StartIndex: 0 }));
 
+  app.get("/Items/Suggestions", (c) => c.json({ Items: [], TotalRecordCount: 0, StartIndex: 0 }));
+
+  app.get("/Users/:userId/Suggestions", (c) => c.json({ Items: [], TotalRecordCount: 0, StartIndex: 0 }));
+
   app.get("/Items/:id/SpecialFeatures", (c) => c.json([]));
 
   app.get("/Users/:userId/Items/:id/SpecialFeatures", (c) => c.json([]));

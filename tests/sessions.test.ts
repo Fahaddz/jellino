@@ -71,6 +71,30 @@ describe("session reporting", () => {
     expect(await readWatchPosition(db, adminId, key)).toBe(999);
   });
 
+  it("accepts case-insensitive and numeric boolean query values", async () => {
+    const { raw, db, adminId } = await household();
+    const token = await liveToken(db, adminId);
+    const app = createApp();
+    const env = testEnv(raw);
+    const id = encodeItem(ALPHA, "movie", "tt100");
+    const key = "movie:tt100";
+
+    const started = post("/Sessions/Playing", token, { ItemId: id, PositionTicks: 0 });
+    expect((await callApp(app, env, started.path, started.init)).status).toBe(200);
+
+    const paused = post("/Sessions/Playing/Progress?IsPaused=TRUE", token, { ItemId: id, PositionTicks: 500000000 });
+    expect((await callApp(app, env, paused.path, paused.init)).status).toBe(200);
+    expect(await readWatchPosition(db, adminId, key)).toBe(500000000);
+
+    const numeric = post("/Sessions/Playing/Progress?isPaused=1", token, { ItemId: id, PositionTicks: 500000001 });
+    expect((await callApp(app, env, numeric.path, numeric.init)).status).toBe(200);
+    expect(await readWatchPosition(db, adminId, key)).toBe(500000001);
+
+    const notPaused = post("/Sessions/Playing/Progress?IsPaused=FALSE", token, { ItemId: id, PositionTicks: 500000002 });
+    expect((await callApp(app, env, notPaused.path, notPaused.init)).status).toBe(200);
+    expect(await readWatchPosition(db, adminId, key)).toBe(500000001);
+  });
+
   it("preserves saved progress when a stop report carries no PositionTicks", async () => {
     const { raw, db, adminId } = await household();
     const token = await liveToken(db, adminId);
@@ -349,6 +373,15 @@ describe("play state", () => {
     const clearRating = await callApp(app, env, `/Users/${adminId}/Items/${id}/Rating`, { method: "DELETE", headers });
     expect(clearRating.status).toBe(200);
     expect(((await clearRating.json()) as { Likes: null }).Likes).toBeNull();
+
+    const tolerantLike = await callApp(app, env, `/Users/${adminId}/Items/${id}/Rating?Likes=TRUE`, { method: "POST", headers });
+    expect(((await tolerantLike.json()) as { Likes: boolean }).Likes).toBe(true);
+
+    const numericClear = await callApp(app, env, `/Users/${adminId}/Items/${id}/Rating?Likes=0`, { method: "POST", headers });
+    expect(((await numericClear.json()) as { Likes: boolean }).Likes).toBe(false);
+
+    const unknown = await callApp(app, env, `/Users/${adminId}/Items/${id}/Rating?Likes=maybe`, { method: "POST", headers });
+    expect(((await unknown.json()) as { Likes: null }).Likes).toBeNull();
 
     const refresh = await callApp(app, env, `/Items/${id}/Refresh`, { method: "POST", headers });
     expect(refresh.status).toBe(204);

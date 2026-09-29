@@ -278,16 +278,20 @@ function sortOrderFor(c: Context<{ Bindings: Env }>): "Ascending" | "Descending"
   return (queryIgnoreCase(c, "SortOrder") ?? "").toLowerCase().startsWith("desc") ? "Descending" : "Ascending";
 }
 
-function genreDto(serverId: string, name: string, movie: number, series: number): Record<string, unknown> {
+function requestedItemCounts(c: Context<{ Bindings: Env }>): boolean {
+  const fields = queryIgnoreCase(c, "Fields");
+  if (!fields) return false;
+  return fields.split(",").some((field) => field.trim().toLowerCase() === "itemcounts");
+}
+
+function genreDto(serverId: string, name: string, movie: number, series: number, withCounts: boolean): Record<string, unknown> {
   return {
     Name: name,
     ServerId: serverId,
     Id: name,
     Type: "Genre",
     IsFolder: true,
-    ChildCount: movie + series,
-    MovieCount: movie,
-    SeriesCount: series,
+    ...(withCounts ? { ChildCount: movie + series, MovieCount: movie, SeriesCount: series } : {}),
   };
 }
 
@@ -337,9 +341,10 @@ export function registerDiscover(app: Hono<{ Bindings: Env }>, serverId: string)
     const ctx = await ownerAndSummary(c, userId);
     if (ctx instanceof Response) return ctx;
     const { summary } = ctx;
+    const withCounts = requestedItemCounts(c);
     return facetPage(c, summary.genres.keys(), (name) => {
       const entry = summary.genres.get(name) ?? { movie: 0, series: 0 };
-      return genreDto(serverId, name, entry.movie, entry.series);
+      return genreDto(serverId, name, entry.movie, entry.series, withCounts);
     });
   }
 
