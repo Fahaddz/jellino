@@ -1,8 +1,10 @@
-import type { D1Database, Fetcher } from "@cloudflare/workers-types";
+import type { D1Database, DurableObjectNamespace, Fetcher } from "@cloudflare/workers-types";
 
 export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
+  SCHEDULER?: DurableObjectNamespace;
+  SELF?: Fetcher;
 }
 
 const SETTINGS_CACHE_TTL_SECONDS = 300;

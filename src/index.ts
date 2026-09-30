@@ -10,7 +10,7 @@ import { renderHomePage } from "./ui/home";
 import { ADMIN_CLIENT_JS } from "./ui/admin-client";
 import { ADMIN_CSS } from "./ui/admin-css";
 import { REMUX_THEME_CSS } from "./ui/remux-css";
-import { authenticateByName, bearerToken, clearProfileDisabledCache, findProfile, issueToken, listProfiles, ownerForRequest, publicDto, rateAllow, readCredentials, userDto, verifiedOwner, verifyToken } from "./session";
+import { authenticateByName, bearerToken, clearProfileDisabledCache, findProfile, issueToken, listProfiles, ownerForRequest, publicDto, rateAllow, readCredentials, serverSecret, userDto, verifiedOwner, verifyToken } from "./session";
 import { collectionTileInfo, collectionsFolderDto, profileCollections, profileLibraries, profileLibrarySplit, profileViewItem, catalogBases, viewDisplayName } from "./library";
 import { isHiddenItem } from "./hidden";
 import { boolQuery, csvSet, imageWidth, pageParams, queryIgnoreCase } from "./query";
@@ -30,6 +30,7 @@ import { ensureSchema, schemaReady } from "./schema";
 import { registerSettings } from "./settings";
 import { BUILD_ID, SERVER_VERSION } from "./version";
 import { runScheduled } from "./cron";
+import { ensureScheduledRun, SCHEDULER_RUN_PATH } from "./scheduler";
 import { registerStubs } from "./stubs";
 import { applyItemQuery, itemQuery, registerDiscover } from "./discover";
 import { personAvatarSvg, personDetail, photoFromImageTag, readPersonPhoto, rememberPersonPhoto, TMDB_API_KEY_SETTING } from "./people";
@@ -126,6 +127,14 @@ export function createApp() {
   registerResume(app, SERVER_ID);
   registerSessions(app);
   registerQuickConnect(app, SERVER_ID, SERVER_NAME);
+
+  app.post(SCHEDULER_RUN_PATH, async (c) => {
+    const provided = bearerToken(c.req.raw);
+    const expected = await serverSecret(c.env.DB);
+    if (!provided || provided !== expected) return c.json({ error: "unauthorized" }, 401);
+    await runScheduled(c.env.DB, caches.default, fetch, Math.floor(Date.now() / 1000));
+    return c.json({ ok: true }, 202);
+  });
 
   app.get("/health", (c) => c.json({ status: "ok", schema: schemaReady() ? "ready" : "pending" }));
 
@@ -1311,9 +1320,11 @@ const itemDtoMemoryCache = new Map<string, { dto: Record<string, unknown>; expir
 
 const workerApp = createApp();
 
+export { SchedulerDO } from "./scheduler";
+
 export default {
-  fetch: workerApp.fetch,
-  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(runScheduled(env.DB, caches.default, fetch, Math.floor(event.scheduledTime / 1000)));
+  fetch(request: Request, env: Env, ctx: ExecutionContext): Response | Promise<Response> {
+    ensureScheduledRun(env, ctx);
+    return workerApp.fetch(request, env, ctx);
   },
 };

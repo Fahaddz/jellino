@@ -2,9 +2,6 @@ name = "jellino"
 main = "src/index.ts"
 compatibility_date = "2026-09-01"
 
-[triggers]
-crons = ["*/15 * * * *"]
-
 [assets]
 binding = "ASSETS"
 directory = "./public"
@@ -16,6 +13,18 @@ binding = "DB"
 database_name = "jellino-dev"
 database_id = "11111111-2222-4333-8333-111111111111"
 migrations_dir = "migrations"
+
+[[durable_objects.bindings]]
+name = "SCHEDULER"
+class_name = "SchedulerDO"
+
+[[migrations]]
+tag = "v1-scheduler"
+new_sqlite_classes = ["SchedulerDO"]
+
+[[services]]
+binding = "SELF"
+service = "jellino"
 
 [observability]
 enabled = false
