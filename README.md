@@ -81,7 +81,7 @@ Jellino adopts proven patterns from established open-source projects rather than
 | **Stream Extraction** | [AIOMetadata](https://github.com/cedya77/aiometadata) / AIOStreams | Maps parsed release tags, audio channels (Atmos, DTS), and stream qualities directly to Jellyfin MediaSources. Streams redirect directly to provider URLs. |
 | **Protocol Surface & BoxSets** | [Remux](https://github.com/lostb1t/remux) | Standard Jellyfin endpoints, virtual folders, BoxSets, and theme styling. |
 | **Continue Watching & Next Up** | Unified Hybrid | Blends in-progress items with next-up episodes and sorts by `UserData.LastPlayedDate`, ensuring seamless resume on both Odin and Moonfin. |
-| **Nuvio Account & Sync** | [Nuvio self-host](https://github.com/NuvioMedia/self-host) & [Nuvio Account Manager](https://github.com/techuhak/Nuvio-Account-Manager) | Profiles, addons, home layouts, and collections mirror Nuvio 1:1. Watch progress syncs every 60s and on play/stop; full sync runs via 15-minute cron or admin button. |
+| **Nuvio Account & Sync** | [Nuvio self-host](https://github.com/NuvioMedia/self-host) & [Nuvio Account Manager](https://github.com/techuhak/Nuvio-Account-Manager) | Profiles, addons, home layouts, and collections mirror Nuvio 1:1. Watch progress syncs every 60s and on play/stop; full sync runs every 15 minutes via a scheduler Durable Object or the admin button. |
 | **Client Actions & Tombstones** | [NuvioTV](https://github.com/NuvioMedia/NuvioTV) + Jellyfin | Removing an item from continue watching deletes it locally and in Nuvio with causal tombstones preventing resurrection. |
 | **Client Auth & Quick Connect** | [jellyfin/jellyfin](https://github.com/jellyfin/jellyfin) | Standard Jellyfin user auth, password hashing, and 6-digit Quick Connect pairing for TV devices. |
 
@@ -130,8 +130,8 @@ When interacting with Continue Watching or item cards in Jellyfin clients (such 
 ## Cloudflare Free Tier
 
 Runs entirely on Cloudflare's generous free tier:
-- One Worker, one D1 database, and the Cache API.
-- No paid add-ons: no R2, KV, Durable Objects, or Queues.
+- One Worker, one D1 database, the Cache API, and one scheduler Durable Object. The 15-minute sync runs on a self-rearming Durable Object alarm chain, so it consumes no Cron Trigger slot.
+- No paid add-ons: no R2, KV, Queues, or additional Durable Objects.
 - Artwork redirects straight to provider CDNs.
 - A simulated day for a family of six (`tests/sim-day.test.ts`) stays under 15k Worker requests, 50k D1 reads, and 15k D1 writes &mdash; less than 15% of your free caps.
 

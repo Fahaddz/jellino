@@ -88,7 +88,7 @@ Key owners: AIOMetadata (subtitles, metadata, segments, streams DTOs), Remux (Je
   - `NuvioMobile`: `SupabaseProgressSyncAdapter.kt`, `SupabaseWatchedSyncAdapter.kt`, `SupabaseLibrarySyncAdapter.kt`
   - `NuvioTV`: `WatchProgress.kt` (`COMPLETED_THRESHOLD = 0.90f`, `STARTED_THRESHOLD = 0.02f`)
 - **Jellino Destination Files:**
-  - `src/nuvio.ts`, `src/nuvio-home.ts`, `src/sessions.ts`, `src/cron.ts`
+  - `src/nuvio.ts`, `src/nuvio-home.ts`, `src/sessions.ts`, `src/cron.ts`, `src/scheduler.ts`
 - **Parity & Key Behaviors:**
   1. **Threshold Alignment:** Jellino uses `MAX_RESUME_PCT = 90` (matching Nuvios 90% threshold for marked-as-watched).
   2. **1-to-1 DTO Fields:** Progress, Watched, and Library RPC payload contracts match upstream fields (`content_id`, `content_type`, `video_id`, `progress_key`, etc.).
@@ -225,7 +225,7 @@ Key owners: AIOMetadata (subtitles, metadata, segments, streams DTOs), Remux (Je
 
 ## Platform constraints
 
-- Cloudflare free tier only: one Worker, one D1 database, the Cache API. No R2, KV, Durable Objects, or Queues.
+- Cloudflare free tier only: one Worker, one D1 database, the Cache API, and one scheduler Durable Object. The 15-minute sync runs on a Durable Object alarm chain (`src/scheduler.ts`, `SchedulerDO`) that re-arms before every run and is bootstrapped from incoming requests — no Cron Trigger slot is used. The DO only schedules; the job itself runs in the Worker via the `SELF` service binding so the Cache API and bindings behave exactly as elsewhere. No R2, KV, Queues, or other Durable Objects.
 - Artwork is a 302 redirect to provider CDNs; subtitle bodies live in the Cache API.
 - Advertise **Jellyfin 12.1.0** (single `SERVER_VERSION` in `src/version.ts`). Modern Jellyfin SDKs refuse versions below 12.
 - Keep per-request fan-out inside Cloudflare subrequest limits. Background warming is deliberately disabled: it doubles subrequests for no user-visible gain (see the README deviations table).

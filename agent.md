@@ -162,7 +162,7 @@ The pipeline is **list → pick → advertise → click → fetch/convert → se
 - **Token Keep-Alive:** Proactive refresh within a 60-second expiration window, and automatic re-authentication upon 401/403 responses.
 - **Backoff:** Exponential backoff for transient Nuvio API errors (429/5xx).
 - **Sync Cadence:**
-  - Background scheduled cron event running every 15 minutes (`crons = ["*/15 * * * *"]`).
+  - Background scheduled run every 15 minutes, driven by the `SchedulerDO` alarm chain in `src/scheduler.ts` (no Cron Trigger; the DO re-arms before each run and calls the Worker's `__internal/scheduled` endpoint via the `SELF` service binding).
   - On-demand manual "Sync Now" button in the WebUI.
   - Automatic background sync on client boot and home/resume queries (`/Users`, `/Users/:id`, `/UserViews`, `/Users/:userId/Items/Resume`, `/Shows/NextUp`) if >= 60 seconds have elapsed since last sync. Resume/NextUp await the throttled (30 s) watch refresh so removals land before the rows are built.
   - Asynchronous background push (`ctx.waitUntil`) on playback stop.
@@ -218,5 +218,5 @@ All tables are initialized via a single idempotent migration [`migrations/0001_i
 ## 5. Maintenance & Cleanup
 
 Maintenance runs asynchronously via `runMaintenance(db, fetchImpl, now)`:
-- Periodic scheduled cron event running every 15 minutes, with heavy database pruning throttled via `maintenanceDue()` to run once per hour.
+- Periodic scheduled run every 15 minutes via the `SchedulerDO` alarm chain, with heavy database pruning throttled via `maintenanceDue()` to run once per hour.
 - Expired Quick Connect codes, old rate-limit entries, and stale addon health rows (>30 days) are removed using batched D1 execution.
